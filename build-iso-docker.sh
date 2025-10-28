@@ -79,7 +79,7 @@ $DOCKER_CMD run --rm -it \
     
     # Internet check and optional flake update
     echo "Checking internet connectivity for flake updates..."
-    if getent hosts github.com >/dev/null 2>&1; then
+    if ping -c 1 -W 2 8.8.8.8 >/dev/null 2>&1 || ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1; then
       echo "Online. Updating flake inputs from GitHub..."
       set +e
       nix flake update --commit-lock-file
