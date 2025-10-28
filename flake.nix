@@ -21,6 +21,10 @@
           system = "x86_64-linux";
           specialArgs = { inherit inputs; }; # pass inputs to modules
           modules = [
+            # Hardware configuration (generated during installation)
+            (if builtins.pathExists ./hardware-configuration.nix 
+             then ./hardware-configuration.nix 
+             else { })
             ./modules/easyos.nix
             ./modules/hotspot.nix
             ./modules/backup.nix
@@ -165,6 +169,9 @@
                   mount -o subvol=var,compress=zstd "$ROOT" /mnt/var
                   mount "$BOOT" /mnt/boot
                   
+                  echo "⚙ Generating hardware configuration..."
+                  nixos-generate-config --root /mnt --no-filesystems
+                  
                   echo "⚙ Cloning easyos flake to /mnt/etc/nixos..."
                   mkdir -p /mnt/etc/nixos
                   GIT_TERMINAL_PROMPT=0 git clone https://github.com/doughty247/easyos.git /mnt/etc/nixos/easyos
@@ -173,6 +180,54 @@
                   mkdir -p /mnt/etc/easy
                   cp /mnt/etc/nixos/easyos/etc/easy/config.example.json /mnt/etc/easy/config.json
                   sed -i "s/\"easyos\"/\"$HOSTNAME\"/" /mnt/etc/easy/config.json
+                  
+                  echo "⚙ Creating hardware-configuration.nix with filesystem mounts..."
+                  cat > /mnt/etc/nixos/easyos/hardware-configuration.nix <<'HWEOF'
+{ config, lib, pkgs, modulesPath, ... }:
+{
+  imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
+  
+  # Bootloader: systemd-boot is configured in easyos.nix, explicitly disable grub
+  boot.loader.grub.enable = false;
+  
+  boot.initrd.availableKernelModules = [ "xhci_pci" "ahci" "nvme" "usbhid" "usb_storage" "sd_mod" ];
+  boot.initrd.kernelModules = [ ];
+  boot.kernelModules = [ "kvm-intel" "kvm-amd" ];
+  boot.extraModulePackages = [ ];
+
+  fileSystems."/" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "btrfs";
+    options = [ "subvol=root" "compress=zstd" ];
+  };
+
+  fileSystems."/home" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "btrfs";
+    options = [ "subvol=home" "compress=zstd" ];
+  };
+
+  fileSystems."/nix" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "btrfs";
+    options = [ "subvol=nix" "compress=zstd" "noatime" ];
+  };
+
+  fileSystems."/var" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "btrfs";
+    options = [ "subvol=var" "compress=zstd" ];
+  };
+
+  fileSystems."/boot" = {
+    device = "/dev/disk/by-label/BOOT";
+    fsType = "vfat";
+  };
+
+  hardware.cpu.intel.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
+  hardware.cpu.amd.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
+}
+HWEOF
                   
                   echo ""
                   echo "⚙ Installing NixOS (this will take several minutes)..."
