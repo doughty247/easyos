@@ -76,20 +76,64 @@ $DOCKER_CMD run --rm -it \
     echo "experimental-features = nix-command flakes" > /root/.config/nix/nix.conf
     git config --global --add safe.directory /workspace
     export GIT_TERMINAL_PROMPT=0
+    export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
     
     # Internet check and optional flake update
     echo "Checking internet connectivity for flake updates..."
     if curl -s --max-time 5 https://github.com > /dev/null 2>&1; then
-      echo "Online. Updating flake inputs from GitHub..."
-      set +e
-      nix flake update --commit-lock-file
-      UPDATE_EXIT=$?
-      set -e
-      if [ $UPDATE_EXIT -ne 0 ]; then
-        echo "⚠ Flake update failed or timed out; proceeding with local flake.lock (may be outdated)."
+      echo "Online. Checking if updates are available..."
+      
+      # Get local flake.lock timestamp if it exists
+      if [ -f flake.lock ]; then
+        LOCAL_TIME=$(stat -c %Y flake.lock 2>/dev/null || stat -f %m flake.lock 2>/dev/null)
+        CURRENT_TIME=$(date +%s)
+        AGE_SECONDS=$((CURRENT_TIME - LOCAL_TIME))
+        AGE_DAYS=$((AGE_SECONDS / 86400))
+        
+        if [ $AGE_DAYS -gt 0 ]; then
+          if [ $AGE_DAYS -eq 1 ]; then
+            AGE_MSG="1 day old"
+          elif [ $AGE_DAYS -lt 30 ]; then
+            AGE_MSG="$AGE_DAYS days old"
+          elif [ $AGE_DAYS -lt 60 ]; then
+            AGE_MSG="1 month old"
+          else
+            AGE_MONTHS=$((AGE_DAYS / 30))
+            AGE_MSG="$AGE_MONTHS months old"
+          fi
+          
+          echo "Local flake.lock is $AGE_MSG."
+          printf "Would you like to update from GitHub? (Y/n): "
+          read -r RESPONSE
+          if [ "$RESPONSE" = "n" ] || [ "$RESPONSE" = "N" ]; then
+            echo "Skipping update. Using local flake.lock."
+          else
+            echo "Updating flake inputs from GitHub..."
+            set +e
+            nix flake update --commit-lock-file 2>&1 | grep -v "warning: ignoring untrusted"
+            UPDATE_EXIT=$?
+            set -e
+            if [ $UPDATE_EXIT -ne 0 ]; then
+              echo "⚠ Flake update failed; proceeding with local flake.lock."
+            else
+              echo "✓ Flake inputs updated successfully."
+            fi
+          fi
+        else
+          echo "Local flake.lock is current (updated today). Skipping update."
+        fi
+      else
+        echo "No local flake.lock found. Fetching latest from GitHub..."
+        set +e
+        nix flake update --commit-lock-file 2>&1 | grep -v "warning: ignoring untrusted"
+        UPDATE_EXIT=$?
+        set -e
+        if [ $UPDATE_EXIT -ne 0 ]; then
+          echo "⚠ Flake update failed."
+        fi
       fi
     else
-      echo "⚠ No internet/DNS unreachable. Using local flake.lock; results may be outdated."
+      echo "⚠ No internet. Using local flake.lock; may be outdated."
     fi
     
     # Build the ISO
@@ -231,9 +275,9 @@ if [ "$VM_TEST" = true ]; then
   VM_DISK="/tmp/easyos-test.img"
   
   echo ""
-  echo "╔════════════════════════════════════════════════════════════════╗"
-  echo "║                   Launching QEMU VM                            ║"
-  echo "╚════════════════════════════════════════════════════════════════╝"
+  echo "================================================================"
+  echo "                   Launching QEMU VM                            "
+  echo "================================================================"
   echo ""
   echo "Creating test disk: $VM_DISK"
   qemu-img create -f qcow2 "$VM_DISK" 20G
