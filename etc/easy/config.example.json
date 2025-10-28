@@ -1,0 +1,35 @@
+{
+  "hostName": "easyos",
+  "timeZone": "UTC",
+  "swapMiB": 4096,
+  "users": {
+    "admin": {
+      "name": "easyadmin",
+      "authorizedKeys": [
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyReplaceMe user@example"
+      ]
+    }
+  },
+
+  "mode": "first-run",
+  "network": {
+    "interface": "wlan0",
+    "ssid": "EASY-Setup",
+    "psk": "changeme-strong-pass"
+  },
+
+  "backup": {
+    "enable": true,
+  "targetType": "local",
+  "target": "/srv/backup",
+    "onCalendar": "daily",
+    "subvolumes": ["/", "/home", "/var"]
+  },
+
+  "storage": {
+    "auto": false,
+    "devices": ["/dev/sdb", "/dev/sdc"],
+    "mountPoint": "/",
+    "profile": "raid1"
+  }
+}
