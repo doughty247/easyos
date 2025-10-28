@@ -167,7 +167,7 @@
                   
                   echo "⚙ Cloning easyos flake to /mnt/etc/nixos..."
                   mkdir -p /mnt/etc/nixos
-                  git clone https://github.com/YOUR_USERNAME/easyos.git /mnt/etc/nixos/easyos
+                  GIT_TERMINAL_PROMPT=0 git clone https://github.com/doughty247/easyos.git /mnt/etc/nixos/easyos
                   
                   echo "⚙ Creating /mnt/etc/easy/config.json..."
                   mkdir -p /mnt/etc/easy
