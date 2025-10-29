@@ -251,13 +251,20 @@ EOF
       fi
     fi
     
-    # Find and copy the ISO to workspace
+    # Find and move the ISO into workspace (clean older ISOs to avoid duplicates)
     ISO_PATH=$(find result/iso -name "*.iso" -type f 2>/dev/null | head -1)
     if [ -n "$ISO_PATH" ]; then
       echo ""
-      echo "Copying ISO to workspace..."
-      cp -v "$ISO_PATH" /workspace/iso-output/
-      echo "ISO copied to iso-output/"
+      echo "Preparing iso-output/ (removing previous ISO files)..."
+      find /workspace/iso-output -maxdepth 1 -type f -name "*.iso" -print -exec rm -f {} + 2>/dev/null || true
+      echo "Transferring ISO to workspace..."
+      # mv may fail when crossing filesystems or from read-only nix store; fall back to copy
+      if mv -v "$ISO_PATH" /workspace/iso-output/ 2>/dev/null; then
+        echo "ISO moved to iso-output/"
+      else
+        cp -v "$ISO_PATH" /workspace/iso-output/
+        echo "ISO copied to iso-output/ (source in nix store retained)"
+      fi
     else
       echo "ERROR: Could not find ISO file" >&2
       exit 1
@@ -312,20 +319,19 @@ if [ $BUILD_EXIT -eq 0 ]; then
         DEST_FILE="$VENTOY_MOUNT/$ISO_NAME"
         
         echo "Found Ventoy at: $VENTOY_MOUNT"
-        echo "Moving ISO to: $DEST_FILE"
+        echo "Copying ISO to: $DEST_FILE"
         
-        # Move from iso-output to Ventoy to avoid duplicating and wasting disk space
-        if mv -v -f "$ISO" "$DEST_FILE" 2>/dev/null; then
+        # Copy to Ventoy (keep local ISO in iso-output for reuse)
+        if cp -v "$ISO" "$DEST_FILE" 2>/dev/null; then
           sync
           echo ""
-          echo "✓ ISO moved to Ventoy USB!"
+          echo "✓ ISO copied to Ventoy USB!"
           echo "  Location: $DEST_FILE"
-          echo "  Source in iso-output/ removed to free space."
           echo "  You can now safely eject the USB and boot from it."
           echo ""
         else
-          echo "WARNING: Failed to move ISO (permission denied?)"
-          echo "  Try: sudo mv \"$ISO\" \"$DEST_FILE\""
+          echo "WARNING: Failed to copy ISO (permission denied?)"
+          echo "  Try: sudo cp \"$ISO\" \"$DEST_FILE\""
           exit 1
         fi
       else
