@@ -77,6 +77,22 @@ Note: `--impure` is required because we read `/etc/easy/config.json` at evaluati
 - Backups: Creates read-only snapshots and sends them to the target. Keeps snapshot staging for 7 days in `/var/lib/easyos/backup-snaps`.
 - Storage expansion: One-shot service adds listed devices to the Btrfs at `mountPoint` and converts/balances to the selected `profile`. A guard file at `/var/lib/easyos/.storage-expand-done` prevents repeat runs.
 
+### First boot (first-run)
+
+- **Web UI** available at **http://<machine-ip>:8088/**
+- If the configured Wi‑Fi interface exists, an AP named `EASY-Setup` is started; otherwise, connect via LAN.
+- TTY1 autologins as root during first-run and displays the setup URL.
+- **One-click workflow:**
+  - Edit `/etc/easy/config.json` directly in the browser
+  - Click **Save & Apply** to automatically save and rebuild
+  - Watch the nixos-rebuild log stream live
+  - No manual terminal commands needed
+- The admin user (default `easyadmin`) has a temporary password `easyos` during first-run; use SSH keys afterwards.
+- **Switch to normal mode:**
+  - Set `"mode": "normal"` in the UI
+  - Click **Save & Apply**
+  - System rebuilds and disables first-run features (autologin, temp password, hotspot)
+
 ## Try it
 
 **Build the ISO:**

@@ -1,0 +1,19 @@
+# Nix build artifacts
+result
+result-*
+iso-output/
+
+# Editor and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS generated
+Thumbs.db
+.Trash-*
+
+# Local configuration (users should copy from example)
+etc/easy/config.json
