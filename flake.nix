@@ -183,9 +183,9 @@ EOF
                   else
                     # No ethernet link (or no ethernet at all): enable Wi‑Fi setup
                     if [ -f /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf ]; then
-                      mv /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf \
+                      sudo mv /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf \
                          /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf.disabled 2>/dev/null || true
-                      systemctl reload NetworkManager || true
+                      sudo systemctl reload NetworkManager || true
                     fi
                     nmcli radio wifi on || true
                     
@@ -293,19 +293,19 @@ EOF
                     read -p "Configure network now? (Y/n): " SETUP_NET
                     
                     if [[ ! "$SETUP_NET" =~ ^[Nn]$ ]]; then
-                      # Re-enable WiFi if it was disabled
-                      if [ -f /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf.disabled ]; then
-                        mv /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf.disabled \
-                           /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf 2>/dev/null || true
+                      # Ensure Wi‑Fi is managed by NetworkManager
+                      if [ -f /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf ]; then
+                        mv /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf \
+                           /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf.disabled 2>/dev/null || true
                         systemctl reload NetworkManager || true
-                        nmcli radio wifi on || true
-                        
-                        # Wait for Wi-Fi to initialize and scan for networks
-                        echo "Scanning for Wi-Fi networks..."
-                        sleep 2
-                        nmcli device wifi list --rescan yes > /dev/null 2>&1 || true
-                        sleep 1
                       fi
+                      nmcli radio wifi on || true
+                      
+                      # Wait for Wi-Fi to initialize and scan for networks
+                      echo "Scanning for Wi-Fi networks..."
+                      sleep 2
+                      nmcli device wifi list --rescan yes > /dev/null 2>&1 || true
+                      sleep 1
                       
                       echo ""
                       echo "Opening network configuration..."
