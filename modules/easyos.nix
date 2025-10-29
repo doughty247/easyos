@@ -18,8 +18,8 @@ in {
   options.easyos.enable = lib.mkEnableOption "Enable EASYOS base configuration";
 
   config = lib.mkIf (config.easyos.enable or true) {
-    # Pin the state version for stable option semantics
-    system.stateVersion = lib.mkDefault "24.11";
+  # Pin the state version for stable option semantics
+  system.stateVersion = lib.mkForce "24.11";
   # Base identification
   networking.hostName = hostName;
 

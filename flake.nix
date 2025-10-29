@@ -444,24 +444,44 @@ EOF
                   
                   echo ""
                   echo "⚙ Partitioning $DEVICE..."
-                  parted -s "$DEVICE" -- mklabel gpt
-                  parted -s "$DEVICE" -- mkpart ESP fat32 1MiB 512MiB
-                  parted -s "$DEVICE" -- set 1 esp on
-                  parted -s "$DEVICE" -- mkpart primary btrfs 512MiB 100%
-                  
-                  # Handle both /dev/sdX and /dev/nvmeXnY naming
-                  if [[ "$DEVICE" =~ "nvme" ]]; then
-                    BOOT="''${DEVICE}p1"
-                    ROOT="''${DEVICE}p2"
+                  if [ -d /sys/firmware/efi ]; then
+                    echo "  Firmware: UEFI (systemd-boot)"
+                    parted -s "$DEVICE" -- mklabel gpt
+                    parted -s "$DEVICE" -- mkpart ESP fat32 1MiB 512MiB
+                    parted -s "$DEVICE" -- set 1 esp on
+                    parted -s "$DEVICE" -- mkpart primary btrfs 512MiB 100%
+
+                    # Handle both /dev/sdX and /dev/nvmeXnY naming
+                    if [[ "$DEVICE" =~ "nvme" ]]; then
+                      BOOT="''${DEVICE}p1"
+                      ROOT="''${DEVICE}p2"
+                    else
+                      BOOT="''${DEVICE}1"
+                      ROOT="''${DEVICE}2"
+                    fi
+                    BOOT_MODE="uefi"
                   else
-                    BOOT="''${DEVICE}1"
-                    ROOT="''${DEVICE}2"
+                    echo "  Firmware: BIOS/Legacy (GRUB)"
+                    parted -s "$DEVICE" -- mklabel gpt
+                    parted -s "$DEVICE" -- mkpart biosboot 1MiB 2MiB
+                    parted -s "$DEVICE" -- set 1 bios_grub on
+                    parted -s "$DEVICE" -- mkpart primary btrfs 2MiB 100%
+
+                    if [[ "$DEVICE" =~ "nvme" ]]; then
+                      ROOT="''${DEVICE}p2"
+                    else
+                      ROOT="''${DEVICE}2"
+                    fi
+                    BOOT="" # no separate /boot
+                    BOOT_MODE="bios"
                   fi
                   
                   sleep 2  # Wait for kernel to recognize partitions
                   
                   echo "⚙ Formatting partitions..."
-                  mkfs.fat -F 32 -n BOOT "$BOOT"
+                  if [ "$BOOT_MODE" = "uefi" ]; then
+                    mkfs.fat -F 32 -n BOOT "$BOOT"
+                  fi
                   mkfs.btrfs -f -L nixos "$ROOT"
                   
                   echo "⚙ Creating btrfs subvolumes..."
@@ -474,11 +494,23 @@ EOF
                   
                   echo "⚙ Mounting filesystems..."
                   mount -o subvol=root,compress=zstd "$ROOT" /mnt
-                  mkdir -p /mnt/{home,nix,var,boot}
+                  mkdir -p /mnt/{home,nix,var}
+                  [ "$BOOT_MODE" = "uefi" ] && mkdir -p /mnt/boot || true
                   mount -o subvol=home,compress=zstd "$ROOT" /mnt/home
                   mount -o subvol=nix,compress=zstd,noatime "$ROOT" /mnt/nix
                   mount -o subvol=var,compress=zstd "$ROOT" /mnt/var
-                  mount "$BOOT" /mnt/boot
+                  if [ "$BOOT_MODE" = "uefi" ]; then
+                    mount "$BOOT" /mnt/boot
+                  fi
+
+                  echo "⚙ Creating 8GiB swapfile (with no CoW)..."
+                  # Create swapfile on btrfs correctly: set NOCOW before writing
+                  touch /mnt/swapfile
+                  chattr +C /mnt/swapfile 2>/dev/null || true
+                  fallocate -l 8G /mnt/swapfile 2>/dev/null || dd if=/dev/zero of=/mnt/swapfile bs=1M count=8192
+                  chmod 600 /mnt/swapfile
+                  mkswap /mnt/swapfile
+                  swapon /mnt/swapfile || true
                   
                   echo "⚙ Generating hardware configuration..."
                   nixos-generate-config --root /mnt
@@ -504,15 +536,27 @@ EOF
                   cat /mnt/etc/nixos/easyos/hardware-configuration.nix
                   echo "---------------------------------------------"
 
-                  echo "⚙ Forcing systemd-boot and disabling grub (UEFI install)..."
-                  cat > /mnt/etc/nixos/easyos/easy-bootloader.nix <<'EON'
-                  { lib, ... }: {
-                    boot.loader.systemd-boot.enable = lib.mkForce true;
-                    boot.loader.efi.canTouchEfiVariables = lib.mkForce true;
-                    boot.loader.grub.enable = lib.mkForce false;
-                    boot.loader.grub.devices = lib.mkForce [ ];
-                  }
-                  EON
+                  if [ "$BOOT_MODE" = "uefi" ]; then
+                    echo "⚙ Configuring bootloader (systemd-boot)..."
+                    cat > /mnt/etc/nixos/easyos/easy-bootloader.nix <<'EON'
+                    { lib, ... }: {
+                      boot.loader.systemd-boot.enable = lib.mkForce true;
+                      boot.loader.efi.canTouchEfiVariables = lib.mkForce true;
+                      boot.loader.grub.enable = lib.mkForce false;
+                      boot.loader.grub.devices = lib.mkForce [ ];
+                    }
+                    EON
+                  else
+                    echo "⚙ Configuring bootloader (GRUB BIOS)..."
+                    cat > /mnt/etc/nixos/easyos/easy-bootloader.nix <<EON
+                    { lib, ... }: {
+                      boot.loader.systemd-boot.enable = lib.mkForce false;
+                      boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
+                      boot.loader.grub.enable = lib.mkForce true;
+                      boot.loader.grub.devices = lib.mkForce [ "${DEVICE}" ];
+                    }
+                    EON
+                  fi
                   
                   echo "⚙ Creating /mnt/etc/easy/config.json..."
                   mkdir -p /mnt/etc/easy
@@ -549,6 +593,9 @@ EOF
                   
                   # Store channel information
                   echo "$CHANNEL" > /mnt/etc/easy/channel
+
+                  # Remove VCS metadata to avoid 'dirty tree' warnings during install
+                  rm -rf /mnt/etc/nixos/easyos/.git 2>/dev/null || true
 
                   # Determine flake attribute for selected channel (nixos-install expects just the name)
                   FLAKE_ATTR="easyos-$CHANNEL"
