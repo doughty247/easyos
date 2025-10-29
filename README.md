@@ -1,126 +1,125 @@
-# easyos (WIP)
+# easyos
 
-NixOS-based rewrite of EASY as a declarative appliance. A single JSON file at `/etc/easy/config.json` drives the system. Apply changes with an impure rebuild.
+NixOS-based declarative appliance OS. Configure everything via `/etc/easy/config.json` and apply changes with a single command.
 
-## Installation
+## Features
 
-See **[INSTALL.md](INSTALL.md)** for complete installation options:
+- **Simple Installation** — Guided installer with automatic partitioning and setup
+- **Easy Network Setup** — Automatic Wi-Fi scanning and configuration via nmtui
+- **Built-in Help** — Type `easy-help` for quick commands and documentation
+- **Update Channels** — Choose stable, beta, or preview channels
+- **Web UI** — Manage your system via browser at http://localhost:8080
+- **Hotspot Mode** — Automatic Wi-Fi access point for initial setup (post-install)
+- **Btrfs Backups** — Automated snapshots and backups to USB/external drives
+- **Storage Expansion** — Add drives and expand storage dynamically
 
-- **Fresh Install from ISO** — Build a bootable ISO using Docker on Bazzite, test in VM or write to USB
-- **Remote Install** — Clone and apply on an existing NixOS system
-- **Development/Testing** — Build and test locally without installing
+## Quick Start
 
-Also see **[DOCKER.md](DOCKER.md)** for detailed Docker build workflow on Bazzite.
+### Building the ISO
 
-## Quick start (existing NixOS)
-
-1) Clone and prepare config:
+On a Linux system with Docker/Podman:
 ```bash
-sudo git clone https://github.com/YOUR_USERNAME/easyos.git /etc/nixos/easyos
-sudo cp /etc/nixos/easyos/etc/easy/config.example.json /etc/easy/config.json
-sudo nano /etc/easy/config.json  # customize hostname, keys, etc.
+git clone https://github.com/doughty247/easyos.git
+cd easyos
+./build-iso-docker.sh --ventoy  # Auto-copies to Ventoy USB if detected
 ```
 
-2) Apply configuration:
-```bash
-sudo nixos-rebuild switch --impure --flake /etc/nixos/easyos#easyos
-```
+### Installation
 
-Note: `--impure` is required because we read `/etc/easy/config.json` at evaluation time.
+1. Boot from the ISO
+2. Connect to network (automatically prompted if needed)
+3. Follow the guided installer
+4. Set your hostname, username, and passwords
+5. Choose your update channel (stable/beta/preview)
+6. Reboot into your new system
 
-## What’s included
+### First Boot
 
-- Core headless server baseline (systemd-boot, systemd-networkd, OpenSSH hardened, PipeWire)
-- Home Manager baseline for the admin user
-- Hotspot/guest mode (hostapd + dnsmasq + captive stub) when `mode` is `first-run` or `guest`
-- Btrfs backups (send/receive) via service + timer (local or SSH target)
-- Btrfs storage expansion helper (device add + balance to RAID1 or selected profile)
+On first boot, the system will:
+- Auto-login as your chosen admin user
+- Display setup options and helpful commands
+- Start the Wi-Fi hotspot if Wi-Fi hardware is available (no Ethernet)
+- Make the web UI available at your device's IP
 
-## JSON schema (minimal)
+Type `easy-help` anytime to see available commands and documentation.
+
+## Configuration
+
+Edit `/etc/easy/config.json` to configure your system:
 
 ```json
 {
   "hostName": "easyos",
   "timeZone": "UTC",
-  "swapMiB": 4096,
+  "swapMiB": 8192,
   "users": {
     "admin": {
       "name": "easyadmin",
       "authorizedKeys": ["ssh-ed25519 AAAA... you@example"]
     }
   },
-  "mode": "normal", // "first-run" | "guest" | "normal"
+  "mode": "first-run",
   "network": {
-    "interface": "wlan0",
     "ssid": "EASY-Setup",
-    "psk": "changeme-strong-pass"
+    "psk": "easyos123"
   },
   "backup": {
     "enable": true,
-    "targetType": "local",  // "local" | "ssh"
-    "target": "/srv/backup",  // or "user@host:/path" when targetType = "ssh"
+    "targetType": "local",
+    "target": "/srv/backup",
     "onCalendar": "daily",
     "subvolumes": ["/", "/home", "/var"]
-  },
-  "storage": {
-    "auto": false,
-    "devices": ["/dev/sdb", "/dev/sdc"],
-    "mountPoint": "/",
-    "profile": "raid1"       // e.g., raid1 | single | raid5 | raid6
   }
 }
 ```
 
-## Notes
-
-- Hotspot: AP runs on the `network.interface` with a basic captive landing page on port 8088 (nginx). Firewall blocks forwarding from hotspot to WAN by default.
-- Backups: Creates read-only snapshots and sends them to the target. Keeps snapshot staging for 7 days in `/var/lib/easyos/backup-snaps`.
-- Storage expansion: One-shot service adds listed devices to the Btrfs at `mountPoint` and converts/balances to the selected `profile`. A guard file at `/var/lib/easyos/.storage-expand-done` prevents repeat runs.
-
-### First boot (first-run)
-
-- **Web UI** available at **http://<machine-ip>:8088/**
-- If the configured Wi‑Fi interface exists, an AP named `EASY-Setup` is started; otherwise, connect via LAN.
-- TTY1 autologins as root during first-run and displays the setup URL.
-- **One-click workflow:**
-  - Edit `/etc/easy/config.json` directly in the browser
-  - Click **Save & Apply** to automatically save and rebuild
-  - Watch the nixos-rebuild log stream live
-  - No manual terminal commands needed
-- The admin user (default `easyadmin`) has a temporary password `easyos` during first-run; use SSH keys afterwards.
-- **Switch to normal mode:**
-  - Set `"mode": "normal"` in the UI
-  - Click **Save & Apply**
-  - System rebuilds and disables first-run features (autologin, temp password, hotspot)
-
-## Try it
-
-**Build the ISO:**
+Apply changes:
 ```bash
-# In a NixOS distrobox on Bazzite
-./build-iso.sh
+sudo nixos-rebuild switch --impure --flake /etc/nixos/easyos#easyos
 ```
 
-**Preview flake outputs:**
+## Useful Commands
+
 ```bash
-nix flake show
+easy-help                      # Show all available commands
+sudo nmtui                     # Configure network connections
+sudo systemctl start easyos-hotspot   # Start Wi-Fi hotspot
+sudo systemctl start easyos-backup    # Run backup now
+cat /etc/easy/channel          # Check your update channel
 ```
 
-**Test in a VM:**
+## Update Channels
+
+- **stable** — LTS kernel, stable features (recommended)
+- **beta** — LTS kernel, beta features
+- **preview** — Latest kernel, bleeding edge (manual build only)
+
+## System Architecture
+
+- **OS Base** — NixOS 24.11 with flakes
+- **Bootloader** — systemd-boot (UEFI only)
+- **Filesystem** — Btrfs with compression and subvolumes
+- **Network** — NetworkManager for easy Wi-Fi/Ethernet management
+- **Credentials** — SHA-512 hashed passwords set during installation
+
+## Building from Source
+
+**Docker/Podman method (recommended):**
 ```bash
-nixos-rebuild build-vm --impure --flake .#easyos
-./result/bin/run-*-vm
+./build-iso-docker.sh          # Build ISO in container
+./build-iso-docker.sh --vm     # Copy to VM directory
+./build-iso-docker.sh --ventoy # Auto-copy to Ventoy USB
 ```
 
-## Roadmap
+**Native NixOS:**
+```bash
+nix build .#isoImage-stable    # Build stable channel ISO
+nix build .#isoImage-beta      # Build beta channel ISO
+```
 
-- Replace captive stub with real web UI editing `/etc/easy/config.json` and triggering rebuilds
-- Service modules for Nextcloud, Immich, and Guardian-like health checks
-- Update flow aligned to flakes (auto updates with snapshots and rollback)
+## Support
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Issues and PRs welcome!
+Issues and pull requests welcome at https://github.com/doughty247/easyos
 
 ## License
 
