@@ -251,8 +251,12 @@ EOF
               users.users.nixos = {
                 isNormalUser = true;
                 extraGroups = [ "wheel" "networkmanager" ];
-                # Empty password allows login without password
-                initialPassword = "";
+                # Make password handling unambiguous: only initialPassword set
+                initialPassword = "";              # autologin user; no password needed
+                initialHashedPassword = lib.mkForce null;
+                hashedPassword = lib.mkForce null;
+                hashedPasswordFile = lib.mkForce null;
+                password = lib.mkForce null;
               };
               
               # Extra safety: allow wheel group passwordless sudo via sudoers rule
