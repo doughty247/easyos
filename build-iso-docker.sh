@@ -312,19 +312,20 @@ if [ $BUILD_EXIT -eq 0 ]; then
         DEST_FILE="$VENTOY_MOUNT/$ISO_NAME"
         
         echo "Found Ventoy at: $VENTOY_MOUNT"
-        echo "Copying ISO to: $DEST_FILE"
+        echo "Moving ISO to: $DEST_FILE"
         
-        # Copy from wherever the ISO actually is
-        if cp -v "$ISO" "$DEST_FILE" 2>/dev/null; then
+        # Move from iso-output to Ventoy to avoid duplicating and wasting disk space
+        if mv -v -f "$ISO" "$DEST_FILE" 2>/dev/null; then
           sync
           echo ""
-          echo "✓ ISO copied to Ventoy USB!"
+          echo "✓ ISO moved to Ventoy USB!"
           echo "  Location: $DEST_FILE"
+          echo "  Source in iso-output/ removed to free space."
           echo "  You can now safely eject the USB and boot from it."
           echo ""
         else
-          echo "WARNING: Failed to copy ISO (permission denied?)"
-          echo "  Try: sudo cp \"$ISO\" \"$DEST_FILE\""
+          echo "WARNING: Failed to move ISO (permission denied?)"
+          echo "  Try: sudo mv \"$ISO\" \"$DEST_FILE\""
           exit 1
         fi
       else
