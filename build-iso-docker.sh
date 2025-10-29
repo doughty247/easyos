@@ -168,17 +168,20 @@ EOF
       fi
     
     # Internet check and optional flake update
-    echo "Checking internet connectivity for flake updates..."
-    # More robust connectivity check that does not depend on TLS CA presence in the container
+    echo "Checking GitHub connectivity for flake updates..."
     ONLINE=0
-    if getent hosts github.com > /dev/null 2>&1; then
-      # Use an HTTP-only endpoint to avoid CA issues on minimal images
-      if curl -s --max-time 5 http://neverssl.com > /dev/null 2>&1; then
-        ONLINE=1
-      fi
+    # Prefer a direct check to the EasyOS repo; fall back to generic GitHub checks
+    if git ls-remote --heads https://github.com/doughty247/easyos.git >/dev/null 2>&1; then
+      ONLINE=1
+    elif curl -s --max-time 5 -I https://github.com/doughty247/easyos >/dev/null 2>&1; then
+      ONLINE=1
+    elif curl -s --max-time 5 -I https://github.com >/dev/null 2>&1; then
+      ONLINE=1
+    else
+      ONLINE=0
     fi
     if [ "$ONLINE" -eq 1 ]; then
-      echo "Online. Checking if updates are available..."
+  echo "Online. Checking if updates are available..."
       
       # Get local flake.lock timestamp if it exists
       if [ -f flake.lock ]; then
@@ -237,7 +240,7 @@ EOF
     if [ "${SUPPRESS_XATTR_WARNINGS}" = "true" ]; then
       set -o pipefail
       nix build .#nixosConfigurations.iso.config.system.build.isoImage --impure --print-build-logs --accept-flake-config 2>&1 | \
-        grep -Evi "lgetxattr|lsetxattr|llistxattr|lremovexattr|read_attrs|write_attrs"
+        grep -Evi "lgetxattr|lsetxattr|llistxattr|lremovexattr|read_attrs|write_attrs|^warning: Git tree .+ is dirty$"
       BUILD_STATUS=$?
       set +o pipefail
       if [ $BUILD_STATUS -ne 0 ]; then
