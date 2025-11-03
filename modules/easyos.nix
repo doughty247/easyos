@@ -117,65 +117,96 @@ in {
       # Help command for EasyOS
       (pkgs.writeShellScriptBin "easy-help" ''
         cat << 'EOF'
-╔════════════════════════════════════════════════════════════════╗
-║                      EasyOS Quick Help                         ║
-╚════════════════════════════════════════════════════════════════╝
+
+EasyOS Quick Reference
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 SYSTEM INFORMATION
-  cat /etc/easy/channel          Check update channel (stable/beta/preview)
-  cat /etc/easy/config.json      View system configuration
-  systemctl status easyos-*      Check EasyOS services status
-  
+    cat /etc/easy/channel               Show update channel (stable/beta/preview)
+    cat /etc/easy/config.json           View system configuration
+    systemctl status easyos-*           Check EasyOS service status
+    uname -r                            Show kernel version
+    hostnamectl                         Show hostname and system info
+
 NETWORKING
-  sudo nmtui                       Configure network connections
-  nmcli device wifi list           List available Wi-Fi networks
-  nmcli connection show            Show network connections
-  ip addr show                     Show IP addresses
+    sudo nmtui                          Network configuration (TUI)
+    nmcli device wifi list              List available Wi-Fi networks
+    nmcli connection show               Show all network connections
+    ip addr show                        Show IP addresses
+    ip route show                       Show routing table
+    ping -c4 8.8.8.8                    Test internet connectivity
 
 HOTSPOT & ACCESS POINT
-  sudo systemctl start easyos-hotspot   Start Wi-Fi hotspot
-  sudo systemctl stop easyos-hotspot    Stop Wi-Fi hotspot
-  sudo systemctl status easyos-hotspot  Check hotspot status
+    systemctl start easyos-hotspot      Start Wi-Fi hotspot
+    systemctl stop easyos-hotspot       Stop Wi-Fi hotspot
+    systemctl status easyos-hotspot     Check hotspot status
+
+    Features: Router-grade NAT/masquerading, DHCP/DNS server,
+              captive portal detection, client isolation support
+
+NETWORK PERFORMANCE & QoS
+    cat /etc/easy/qos-current.json                Current QoS settings
+    cat /var/lib/easyos/network-profiles.json     Network speed profiles
+    systemctl status easyos-network-autodiscovery Network auto-detection
+
+    Technology: CAKE QoS (bufferbloat control), BBR congestion control,
+                per-network bandwidth profiling, TCP Fast Open enabled
 
 BACKUP & STORAGE
-  sudo systemctl start easyos-backup    Run backup to USB/external drive
-  df -h                                 Check disk space usage
-  sudo btrfs filesystem usage /         Detailed Btrfs space info
-  sudo btrfs subvolume list /           List Btrfs subvolumes
+    systemctl start easyos-backup       Run backup now
+    systemctl status easyos-backup      Check backup status
+    df -h                               Disk space usage (human-readable)
+    sudo btrfs filesystem usage /       Detailed Btrfs statistics
+    sudo btrfs subvolume list /         List Btrfs subvolumes
+
+ENCRYPTION (TPM2/LUKS)
+    systemctl status systemd-cryptsetup@*   Check encrypted volumes
+    sudo cryptsetup status data             Show encryption details
+    sudo systemd-cryptenroll /dev/xxx       Manage TPM enrollment
+
+    Note: If TPM was enabled during install, data partition auto-unlocks.
+          Recovery key was displayed as QR code during installation.
 
 WEB INTERFACE
-  The EasyOS web UI is available at:
-    http://localhost:8080 (or your device's IP)
-  To find your IP: ip addr show
+    URL: http://localhost:8088 (or http://<device-ip>:8088)
+    Use 'ip addr show' to find your device's IP address
 
 CONFIGURATION
-  Edit config:    sudo nano /etc/easy/config.json
-  Apply changes:  sudo nixos-rebuild switch --impure --flake /etc/nixos/easyos#easyos
-  View channel:   cat /etc/easy/channel
+    Edit:       sudo nano /etc/easy/config.json
+    Apply:      sudo nixos-rebuild switch --impure --flake /etc/nixos/easyos#easyos
+    Channel:    cat /etc/easy/channel
 
 TROUBLESHOOTING
-  journalctl -u easyos-*        View EasyOS service logs
-  journalctl -b                 View boot logs
-  journalctl -f                 Follow live system logs
-  dmesg                         View kernel messages
+    journalctl -u easyos-*              EasyOS service logs
+    journalctl -b                       Current boot logs
+    journalctl -f                       Follow live system logs
+    journalctl -xe                      Recent logs with explanations
+    dmesg                               Kernel ring buffer
+    dmesg | grep -i tpm                 Check TPM detection
+    systemctl --failed                  List failed services
 
 USER MANAGEMENT
-  passwd                        Change your password
-  sudo passwd root              Change root password
-  sudo useradd -m username      Add new user
+    passwd                              Change your password
+    sudo passwd <username>              Change another user's password
+    sudo useradd -m <username>          Add new user
+    sudo usermod -aG wheel <username>   Add user to admin group
 
-DOCUMENTATION
-  README: /etc/nixos/easyos/README.md
-  GitHub: https://github.com/doughty247/easyos
+NIXOS SYSTEM MANAGEMENT
+    nixos-rebuild switch --impure --flake /etc/nixos/easyos#easyos
+                                        Apply configuration changes
+    nixos-rebuild boot                  Apply changes at next boot
+    nix-collect-garbage -d              Remove old system generations
+    nix-channel --update                Update NixOS channels
+    nix-env -qa                         Query available packages
 
-NIXOS COMMANDS
-  nixos-rebuild switch --impure --flake /etc/nixos/easyos#easyos
-                                Apply configuration changes
-  nixos-help                    NixOS documentation
-  nix-shell                     Enter development environment
-  nix-collect-garbage -d        Clean up old system generations
+DOCUMENTATION & SUPPORT
+    Local:  /etc/nixos/easyos/README.md
+    Online: https://github.com/doughty247/easyos
+    NixOS:  https://nixos.org/manual/nixos/stable/
 
-═══════════════════════════════════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Type 'man <command>' for detailed help on any command
+EOF
 Type 'easy-help' anytime to see this message again.
 EOF
       '')

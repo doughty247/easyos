@@ -8,6 +8,22 @@ let
   netCfg = if (cfgJSON ? network) then cfgJSON.network else {};
   ssid = if (netCfg ? ssid) then netCfg.ssid else "EASY-Setup";
   psk  = if (netCfg ? psk) then netCfg.psk else "changeme-strong-pass";
+  
+  # Hotspot network configuration
+  hotspotSubnet = if (netCfg ? hotspotSubnet) then netCfg.hotspotSubnet else "10.42.0.0/24";
+  hotspotIP = if (netCfg ? hotspotIP) then netCfg.hotspotIP else "10.42.0.1";
+  hotspotDHCPStart = if (netCfg ? hotspotDHCPStart) then netCfg.hotspotDHCPStart else "10.42.0.10";
+  hotspotDHCPEnd = if (netCfg ? hotspotDHCPEnd) then netCfg.hotspotDHCPEnd else "10.42.0.250";
+  wifiChannel = if (netCfg ? wifiChannel) then netCfg.wifiChannel else "6";
+  clientIsolation = if (netCfg ? clientIsolation) then netCfg.clientIsolation else true;
+  
+  # QoS configuration (CAKE algorithm for bufferbloat control)
+  qosEnabled = if (netCfg ? qosEnabled) then netCfg.qosEnabled else true;
+  qosDownloadMbps = if (netCfg ? qosDownloadMbps) then netCfg.qosDownloadMbps else "100";  # Adjust to your WAN speed
+  qosUploadMbps = if (netCfg ? qosUploadMbps) then netCfg.qosUploadMbps else "20";  # Adjust to your WAN speed
+  
+  # WiFi performance tuning
+  wifiPowerSave = if (netCfg ? wifiPowerSave) then netCfg.wifiPowerSave else false;  # Disabled by default for speed
 
   hotspotEnabled = (mode == "first-run") || (mode == "guest");
   captivePort = 8088;
@@ -21,8 +37,12 @@ in {
   config = lib.mkIf (config.easyos.hotspot.enable && hotspotEnabled) {
     assertions = [
       { assertion = ssid != null && psk != null; message = "hotspot: SSID/PSK must be set."; }
+      { assertion = lib.stringLength psk >= 8; message = "hotspot: PSK must be at least 8 characters for WPA2."; }
     ];
 
+    # Network performance tuning is handled by network-performance.nix module
+    # This module only handles hotspot-specific configuration
+    
     networking.networkmanager.enable = true;
     
     # Don't create the connection profile declaratively - it will be created at runtime
@@ -65,6 +85,16 @@ in {
         
         echo "Found WiFi interface: $WIFI_IFACE"
         
+        # Disable WiFi power saving for maximum performance and low latency
+        ${lib.optionalString (!wifiPowerSave) ''
+          echo "Disabling WiFi power management on $WIFI_IFACE for optimal performance"
+          ${pkgs.iw}/bin/iw dev "$WIFI_IFACE" set power_save off 2>/dev/null || true
+          # Also set via sysfs if available
+          if [ -e "/sys/class/net/$WIFI_IFACE/device/power_save" ]; then
+            echo 0 > "/sys/class/net/$WIFI_IFACE/device/power_save" 2>/dev/null || true
+          fi
+        ''}
+        
         # Delete any existing hotspot connection
         ${pkgs.networkmanager}/bin/nmcli connection delete easyos-hotspot 2>/dev/null || true
         
@@ -77,8 +107,10 @@ in {
           ssid "${ssid}" \
           802-11-wireless.mode ap \
           802-11-wireless.band bg \
+          802-11-wireless.channel ${wifiChannel} \
+          ${lib.optionalString clientIsolation "802-11-wireless.ap-isolation yes"} \
           ipv4.method shared \
-          ipv4.addresses 10.42.0.1/24 \
+          ipv4.addresses ${hotspotIP}/24 \
           ipv6.method disabled \
           wifi-sec.key-mgmt wpa-psk \
           wifi-sec.psk "${psk}"
@@ -90,13 +122,58 @@ in {
         }
         
         echo "Hotspot 'easyos-hotspot' activated successfully on $WIFI_IFACE"
+        
+        # Set up NAT/masquerading for hotspot clients to reach internet via WAN interface
+        # Find the default route interface (WAN)
+        WAN_IFACE=$(${pkgs.iproute2}/bin/ip route | ${pkgs.gnugrep}/bin/grep '^default' | ${pkgs.gawk}/bin/awk '{print $5}' | ${pkgs.coreutils}/bin/head -1 || true)
+        
+        if [ -n "$WAN_IFACE" ] && [ "$WAN_IFACE" != "$WIFI_IFACE" ]; then
+          echo "Setting up NAT: $WIFI_IFACE (hotspot) -> $WAN_IFACE (WAN)"
+          
+          # NAT rule: masquerade traffic from hotspot subnet going to WAN
+          ${pkgs.iptables}/bin/iptables -t nat -A POSTROUTING -s ${hotspotSubnet} -o "$WAN_IFACE" -j MASQUERADE
+          
+          # Allow forwarding from hotspot to WAN
+          ${pkgs.iptables}/bin/iptables -A FORWARD -i "$WIFI_IFACE" -o "$WAN_IFACE" -j ACCEPT
+          ${pkgs.iptables}/bin/iptables -A FORWARD -i "$WAN_IFACE" -o "$WIFI_IFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT
+        else
+          echo "No WAN interface found or WAN is same as WiFi - NAT not configured"
+        fi
+        
+        # DNS hijacking for captive portal detection
+        # Redirect all DNS queries from hotspot clients to our local DNS
+        ${pkgs.iptables}/bin/iptables -t nat -A PREROUTING -i "$WIFI_IFACE" -p udp --dport 53 -j DNAT --to ${hotspotIP}:53
+        ${pkgs.iptables}/bin/iptables -t nat -A PREROUTING -i "$WIFI_IFACE" -p tcp --dport 53 -j DNAT --to ${hotspotIP}:53
+        
+        # Note: System-wide CAKE QoS is handled by network-performance.nix module
+        # It applies to all traffic including hotspot
       '';
       
       preStop = ''
+        # QoS cleanup is handled by network-performance.nix module
+        
+        # Clean up iptables rules
+        WIFI_IFACE=$(${pkgs.networkmanager}/bin/nmcli -t -f DEVICE,TYPE device 2>/dev/null | ${pkgs.gnugrep}/bin/grep ':wifi$' | ${pkgs.coreutils}/bin/cut -d: -f1 | ${pkgs.coreutils}/bin/head -1 || true)
+        if [ -n "$WIFI_IFACE" ]; then
+          ${pkgs.iptables}/bin/iptables -t nat -D PREROUTING -i "$WIFI_IFACE" -p udp --dport 53 -j DNAT --to ${hotspotIP}:53 2>/dev/null || true
+          ${pkgs.iptables}/bin/iptables -t nat -D PREROUTING -i "$WIFI_IFACE" -p tcp --dport 53 -j DNAT --to ${hotspotIP}:53 2>/dev/null || true
+          
+          if [ -n "$WAN_IFACE" ]; then
+            ${pkgs.iptables}/bin/iptables -t nat -D POSTROUTING -s ${hotspotSubnet} -o "$WAN_IFACE" -j MASQUERADE 2>/dev/null || true
+            ${pkgs.iptables}/bin/iptables -D FORWARD -i "$WIFI_IFACE" -o "$WAN_IFACE" -j ACCEPT 2>/dev/null || true
+            ${pkgs.iptables}/bin/iptables -D FORWARD -i "$WAN_IFACE" -o "$WIFI_IFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
+          fi
+        fi
+        
         ${pkgs.networkmanager}/bin/nmcli connection down easyos-hotspot 2>/dev/null || true
         ${pkgs.networkmanager}/bin/nmcli connection delete easyos-hotspot 2>/dev/null || true
       '';
     };
+
+    # NetworkManager's 'shared' mode already runs dnsmasq automatically
+    # We don't need to enable a separate dnsmasq service - it handles DHCP/DNS for us
+    # NetworkManager spawns dnsmasq only when the hotspot connection is active
+    # This prevents the boot-time dnsmasq failures seen in the logs
 
     services.nginx = {
       enable = true;
@@ -131,6 +208,27 @@ in {
       };
     };
 
-  networking.firewall.allowedTCPPorts = lib.mkAfter [ 80 ];
+    # Firewall configuration for hotspot
+    networking.firewall = {
+      # Allow DNS, DHCP, HTTP for captive portal
+      allowedUDPPorts = lib.mkAfter [ 53 67 ];
+      allowedTCPPorts = lib.mkAfter [ 53 80 captivePort ];
+      
+      # Allow forwarding between hotspot and WAN
+      extraCommands = ''
+        # These rules are set up dynamically by the hotspot service
+        # but we need to ensure forwarding policy allows them
+        iptables -P FORWARD DROP
+        iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+      '';
+    };
+    
+    # Environment packages for hotspot management
+    environment.systemPackages = with pkgs; [
+      iptables
+      iproute2
+      iw  # For WiFi power management control
+    ];
   };
 }
+

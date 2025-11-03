@@ -8,7 +8,11 @@ set -euo pipefail
 VENTOY_COPY=false
 VM_TEST=false
 VM_UPDATE=false
+FORCE_BUILD=false
 SUPPRESS_XATTR_WARNINGS=true  # Default to suppressing xattr warnings (they're harmless but slow)
+EXPORT_ARTIFACTS=true
+ARTIFACTS_DIR="iso-output/_artifacts"
+NON_INTERACTIVE=false
 
 for arg in "$@"; do
   case $arg in
@@ -21,15 +25,32 @@ for arg in "$@"; do
     --update-vm)
       VM_UPDATE=true
       ;;
+    --force|--rebuild)
+      FORCE_BUILD=true
+      ;;
     --no-xattr-warnings|--quiet-xattr)
       SUPPRESS_XATTR_WARNINGS=true
       ;;
+    --no-artifacts)
+      EXPORT_ARTIFACTS=false
+      ;;
+    --artifacts-dir=*)
+      EXPORT_ARTIFACTS=true
+      ARTIFACTS_DIR="${arg#*=}"
+      ;;
+    --non-interactive)
+      NON_INTERACTIVE=true
+      ;;
     *)
-      echo "Usage: $0 [--ventoy] [--vm] [--update-vm] [--no-xattr-warnings]"
+      echo "Usage: $0 [--ventoy] [--vm] [--update-vm] [--force] [--no-xattr-warnings] [--non-interactive]"
       echo "  --ventoy  Auto-copy ISO to Ventoy USB drive"
       echo "  --vm      Launch ISO in QEMU VM for testing (fresh install)"
       echo "  --update-vm  Boot existing VM disk and auto-update with latest flake"
+      echo "  --force   Force a rebuild even if the ISO appears up-to-date"
       echo "  --no-xattr-warnings  Hide harmless lgetxattr/read_attrs warnings from build logs"
+      echo "  --no-artifacts       Skip exporting helper artifacts for inspection"
+      echo "  --artifacts-dir=DIR  Export artifacts into DIR (relative to repo root)"
+      echo "  --non-interactive    Never prompt (auto-skip flake update prompts)"
       exit 1
       ;;
   esac
@@ -58,6 +79,17 @@ fi
 echo "Using: $DOCKER_CMD"
 echo ""
 
+# Preflight: ensure critical sources are tracked by git so Nix flakes include them
+if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if ! git ls-files --error-unmatch "scripts/easyos-install.sh" >/dev/null 2>&1; then
+    echo "ERROR: scripts/easyos-install.sh is not tracked by git."
+    echo "       Add and commit it so the ISO includes the latest installer:"
+    echo "         git add scripts/easyos-install.sh && git commit -m 'Include installer'"
+    echo "       Or build with --force after adding the file."
+    exit 1
+  fi
+fi
+
 # Pull the image if needed (requires internet)
 if ! $DOCKER_CMD images nixos/nix:latest | grep -q nixos; then
   echo "Pulling nixos/nix:latest..."
@@ -67,66 +99,130 @@ if ! $DOCKER_CMD images nixos/nix:latest | grep -q nixos; then
   fi
 fi
 
-# Check if we need to rebuild
-NEEDS_BUILD=true
+# Check for existing ISO output directory (build happens inside container)
 ISO_OUTPUT_DIR="iso-output"
 mkdir -p "$ISO_OUTPUT_DIR"
 
-EXISTING_ISO=$(find "$ISO_OUTPUT_DIR" -name "*.iso" -type f 2>/dev/null | head -1)
+ARTIFACTS_DIR_HOST=""
+ARTIFACTS_DIR_CONTAINER=""
+if [ "$EXPORT_ARTIFACTS" = true ]; then
+  ARTIFACTS_DIR="${ARTIFACTS_DIR%/}"
+  ARTIFACTS_DIR="${ARTIFACTS_DIR#./}"
+  if [ -z "$ARTIFACTS_DIR" ] || [ "$ARTIFACTS_DIR" = "." ]; then
+    ARTIFACTS_DIR="iso-output/_artifacts"
+  fi
+  if [[ "$ARTIFACTS_DIR" = /* ]]; then
+    echo "ERROR: --artifacts-dir must be relative to the repository root" >&2
+    exit 1
+  fi
+  if [[ "$ARTIFACTS_DIR" = .. || "$ARTIFACTS_DIR" = ../* || "$ARTIFACTS_DIR" = */.. || "$ARTIFACTS_DIR" = */../* ]]; then
+    echo "ERROR: --artifacts-dir cannot reference parent directories" >&2
+    exit 1
+  fi
+  ARTIFACTS_DIR_HOST="$ARTIFACTS_DIR"
+  ARTIFACTS_DIR_CONTAINER="/workspace/$ARTIFACTS_DIR"
+fi
+
+STAMP_FILE="$ISO_OUTPUT_DIR/.easyos-source-hash"
+
+calc_workspace_hash() {
+  # Include all sources that can influence the ISO contents, not just *.nix
+  # Exclude build outputs and caches to avoid noisy false positives
+  mapfile -t files < <(find . \
+    -path "./.git" -prune -o \
+    -path "./result" -prune -o \
+    -path "./iso-output" -prune -o \
+    -path "./.nix-bincache" -prune -o \
+    -type f \( \
+      -name "*.nix" -o \
+      -name "flake.lock" -o \
+      -name "*.sh" -o \
+      -path "./scripts/*" -o \
+      -path "./modules/*" -o \
+      -path "./webui/*" -o \
+      -path "./etc/easy/config.example.json" \
+    \) \
+    -print | LC_ALL=C sort)
+  if [ ${#files[@]} -eq 0 ]; then
+    echo "none"
+    return 0
+  fi
+  local hash_accum=""
+  local part
+  for f in "${files[@]}"; do
+    part=$(sha256sum "$f" 2>/dev/null | cut -d' ' -f1)
+    hash_accum+="$part\n"
+  done
+  printf "%b" "$hash_accum" | sha256sum | cut -d' ' -f1
+}
+
+NEEDS_BUILD=true
+BUILD_PERFORMED=false
+CURRENT_HASH=""
+PREVIOUS_HASH=""
+if [ -f "$STAMP_FILE" ]; then
+  PREVIOUS_HASH=$(<"$STAMP_FILE") || PREVIOUS_HASH=""
+fi
+
+EXISTING_ISO=$(find "$ISO_OUTPUT_DIR" -maxdepth 1 -name "*.iso" -type f 2>/dev/null | head -1)
 
 if [ -n "$EXISTING_ISO" ]; then
   echo "Found existing ISO: $EXISTING_ISO"
-  echo "Checking if rebuild is needed..."
-  
-  # Get ISO timestamp
-  ISO_TIME=$(stat -c %Y "$EXISTING_ISO" 2>/dev/null || stat -f %m "$EXISTING_ISO" 2>/dev/null)
-  
-  # Check if any relevant files have changed since ISO was built
-  CHANGED_FILES=0
-  
-  # Check flake files
-  for file in flake.nix flake.lock modules/*.nix etc/easy/config.example.json hardware-configuration.nix; do
-    if [ -f "$file" ]; then
-      FILE_TIME=$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null)
-      if [ "$FILE_TIME" -gt "$ISO_TIME" ]; then
-        CHANGED_FILES=$((CHANGED_FILES + 1))
-        echo "  Changed: $file"
-      fi
-    fi
-  done
-  
-  if [ "$CHANGED_FILES" -eq 0 ]; then
-    echo "✓ ISO is up to date. Skipping rebuild."
-    NEEDS_BUILD=false
-    
-    # Extract and preserve Nix cache from existing ISO to speed up future builds
-    echo "Extracting Nix cache from ISO to speed up future builds..."
-    CACHE_DIR=".nix-cache"
-    mkdir -p "$CACHE_DIR"
-    
-    # Mount ISO and copy cache if available
-    MOUNT_DIR=$(mktemp -d)
-    if sudo mount -o loop "$EXISTING_ISO" "$MOUNT_DIR" 2>/dev/null; then
-      if [ -d "$MOUNT_DIR/nix/store" ]; then
-        echo "  Copying Nix store cache..."
-        rsync -a --info=progress2 "$MOUNT_DIR/nix/store/" "$CACHE_DIR/" 2>/dev/null || true
-      fi
-      sudo umount "$MOUNT_DIR"
-      rmdir "$MOUNT_DIR"
-      echo "  Cache preserved for faster rebuilds."
-    fi
+  if [ "$FORCE_BUILD" = true ]; then
+    echo "Force rebuild requested (--force/--rebuild)."
   else
-    echo "Files changed since last build. Rebuilding..."
+    CURRENT_HASH=$(calc_workspace_hash || echo "")
+    if [ -n "$PREVIOUS_HASH" ] && [ -n "$CURRENT_HASH" ] && [ "$CURRENT_HASH" = "$PREVIOUS_HASH" ]; then
+      echo "✓ Workspace hash unchanged since last build. Skipping rebuild."
+      NEEDS_BUILD=false
+    else
+      echo "Checking for file changes since last build..."
+      ISO_TIME=$(stat -c %Y "$EXISTING_ISO" 2>/dev/null || stat -f %m "$EXISTING_ISO" 2>/dev/null)
+      CHANGED_REPORT=()
+      while IFS= read -r candidate; do
+        [ -f "$candidate" ] || continue
+        FILE_TIME=$(stat -c %Y "$candidate" 2>/dev/null || stat -f %m "$candidate" 2>/dev/null)
+        if [ "$FILE_TIME" -gt "$ISO_TIME" ]; then
+          CHANGED_REPORT+=("  Changed: ${candidate#./}")
+        fi
+      done < <(find . \
+        -path "./.git" -prune -o \
+        -type f \( -name "*.nix" -o -name "flake.lock" -o -path "./etc/easy/config.example.json" \) \
+        -print | LC_ALL=C sort)
+      if [ ${#CHANGED_REPORT[@]} -gt 0 ]; then
+        printf '%s\n' "${CHANGED_REPORT[@]}"
+      else
+        echo "  (No obvious timestamp changes detected; hash differs or ISO timestamp may be older.)"
+      fi
+      echo "Files changed since last build. Rebuilding..."
+    fi
   fi
 else
   echo "No existing ISO found. Building..."
 fi
 
+if [ "$FORCE_BUILD" = true ] && [ "$EXISTING_ISO" = "" ]; then
+  echo "Force flag provided but no ISO exists yet; proceeding with full build."
+fi
+
+# If --vm is requested and an ISO exists, only skip build when the workspace hash
+# matches the last build; otherwise rebuild so the VM test uses fresh bits.
+if [ "$VM_TEST" = true ] && [ -n "$EXISTING_ISO" ] && [ "$FORCE_BUILD" != true ]; then
+  CURRENT_HASH=${CURRENT_HASH:-}
+  if [ -z "$CURRENT_HASH" ]; then
+    CURRENT_HASH=$(calc_workspace_hash || echo "")
+  fi
+  if [ -n "$PREVIOUS_HASH" ] && [ -n "$CURRENT_HASH" ] && [ "$CURRENT_HASH" = "$PREVIOUS_HASH" ]; then
+    echo "✓ Using existing ISO for VM test (no changes since last build)"
+    NEEDS_BUILD=false
+  else
+    echo "Changes detected; will rebuild ISO before launching VM."
+  fi
+fi
+
 if [ "$NEEDS_BUILD" = false ]; then
-  # Skip to the end
   BUILD_EXIT=0
 elif [ "$VM_UPDATE" = true ]; then
-  # Skip ISO build for --update-vm; we just need to sync the flake to the VM
   echo "Skipping ISO build for --update-vm mode."
   BUILD_EXIT=0
 else
@@ -139,16 +235,62 @@ else
   $DOCKER_CMD volume create easyos-nix-store >/dev/null 2>&1 || true
   $DOCKER_CMD volume create easyos-nix-cache >/dev/null 2>&1 || true
 
-  $DOCKER_CMD run --rm -it \
-  -v "$(pwd):/workspace:Z" \
+  if [ "$EXPORT_ARTIFACTS" = true ] && [ -n "$ARTIFACTS_DIR_HOST" ]; then
+    mkdir -p "$ARTIFACTS_DIR_HOST"
+    find "$ARTIFACTS_DIR_HOST" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+  fi
+
+  # Build docker run args:
+  # - Always pass -i so the heredoc is delivered to the container's bash via STDIN
+  # - Never pass -t to avoid Docker's "the input device is not a TTY" error in CI/pipes
+  DOCKER_RUN_ARGS=("--rm" "-i")
+
+  $DOCKER_CMD run "${DOCKER_RUN_ARGS[@]}" \
+    -v "$(pwd):/workspace:Z" \
     -v easyos-nix-store:/nix \
     -v easyos-nix-cache:/root/.cache/nix \
-  -w /workspace \
-  -e SUPPRESS_XATTR_WARNINGS=${SUPPRESS_XATTR_WARNINGS} \
-  nixos/nix:latest \
-  bash -c '
-    mkdir -p /root/.config/nix
-    cat > /root/.config/nix/nix.conf <<EOF
+    -w /workspace \
+    -e SUPPRESS_XATTR_WARNINGS=${SUPPRESS_XATTR_WARNINGS} \
+    -e EASYOS_EXPORT_ARTIFACTS=${EXPORT_ARTIFACTS} \
+    -e EASYOS_ARTIFACTS_DIR="${ARTIFACTS_DIR_CONTAINER}" \
+    -e EASYOS_NONINTERACTIVE=${NON_INTERACTIVE} \
+    nixos/nix:latest \
+    bash <<'EOS'
+set -euo pipefail
+
+STAMP_FILE="/workspace/iso-output/.easyos-source-hash"
+
+calc_source_hash() {
+  # Mirror host-side hashing: include all sources that affect ISO content
+  mapfile -t files < <(find /workspace \
+    -path "/workspace/.git" -prune -o \
+    -path "/workspace/result" -prune -o \
+    -path "/workspace/iso-output" -prune -o \
+    -path "/workspace/.nix-bincache" -prune -o \
+    -type f \( \
+      -name "*.nix" -o \
+      -name "flake.lock" -o \
+      -name "*.sh" -o \
+      -path "/workspace/scripts/*" -o \
+      -path "/workspace/modules/*" -o \
+      -path "/workspace/webui/*" -o \
+      -path "/workspace/etc/easy/config.example.json" \
+    \) \
+    -print | LC_ALL=C sort)
+  if [ ${#files[@]} -eq 0 ]; then
+    echo "none"
+    return 0
+  fi
+  HASH_ACCUM=""
+  for f in "${files[@]}"; do
+    PART=$(sha256sum "$f" 2>/dev/null | cut -d' ' -f1)
+    HASH_ACCUM+="$PART\n"
+  done
+  printf "%b" "$HASH_ACCUM" | sha256sum | cut -d' ' -f1
+}
+
+mkdir -p /root/.config/nix
+cat > /root/.config/nix/nix.conf <<'EOF'
 experimental-features = nix-command flakes
 filter-syscalls = false
 max-jobs = auto
@@ -157,124 +299,218 @@ narinfo-cache-negative-ttl = 3600
 narinfo-cache-positive-ttl = 432000
 http-connections = 50
 max-substitution-jobs = 16
-  substituters = https://cache.nixos.org file:///workspace/.nix-bincache
-  require-sigs = false
+substituters = https://cache.nixos.org file:///workspace/.nix-bincache
+require-sigs = false
 EOF
-    git config --global --add safe.directory /workspace
-    export GIT_TERMINAL_PROMPT=0
-    export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
-      if [ -d /workspace/.nix-bincache ]; then
-        echo "Using local binary cache: /workspace/.nix-bincache"
-      fi
-    
-    # Internet check and optional flake update
-    echo "Checking GitHub connectivity for flake updates..."
-    ONLINE=0
-    # Prefer a direct check to the EasyOS repo; fall back to generic GitHub checks
-    if git ls-remote --heads https://github.com/doughty247/easyos.git >/dev/null 2>&1; then
-      ONLINE=1
-    elif curl -s --max-time 5 -I https://github.com/doughty247/easyos >/dev/null 2>&1; then
-      ONLINE=1
-    elif curl -s --max-time 5 -I https://github.com >/dev/null 2>&1; then
-      ONLINE=1
-    else
-      ONLINE=0
-    fi
-    if [ "$ONLINE" -eq 1 ]; then
+
+git config --global --add safe.directory /workspace
+export GIT_TERMINAL_PROMPT=0
+export GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+
+if [ -d /workspace/.nix-bincache ]; then
+  echo "Using local binary cache: /workspace/.nix-bincache"
+fi
+
+echo "Checking GitHub connectivity for flake updates..."
+ONLINE=0
+if git ls-remote --heads https://github.com/doughty247/easyos.git >/dev/null 2>&1; then
+  ONLINE=1
+elif curl -s --max-time 5 -I https://github.com/doughty247/easyos >/dev/null 2>&1; then
+  ONLINE=1
+elif curl -s --max-time 5 -I https://github.com >/dev/null 2>&1; then
+  ONLINE=1
+fi
+
+if [ "$ONLINE" -eq 1 ]; then
   echo "Online. Checking if updates are available..."
-      
-      # Get local flake.lock timestamp if it exists
-      if [ -f flake.lock ]; then
-        LOCAL_TIME=$(stat -c %Y flake.lock 2>/dev/null || stat -f %m flake.lock 2>/dev/null)
-        CURRENT_TIME=$(date +%s)
-        AGE_SECONDS=$((CURRENT_TIME - LOCAL_TIME))
-        AGE_DAYS=$((AGE_SECONDS / 86400))
-        
-        if [ $AGE_DAYS -gt 0 ]; then
-          if [ $AGE_DAYS -eq 1 ]; then
-            AGE_MSG="1 day old"
-          elif [ $AGE_DAYS -lt 30 ]; then
-            AGE_MSG="$AGE_DAYS days old"
-          elif [ $AGE_DAYS -lt 60 ]; then
-            AGE_MSG="1 month old"
+  cd /workspace
+  if [ -f flake.lock ]; then
+    LOCAL_TIME=$(stat -c %Y flake.lock 2>/dev/null || stat -f %m flake.lock 2>/dev/null)
+    CURRENT_TIME=$(date +%s)
+    AGE_SECONDS=$((CURRENT_TIME - LOCAL_TIME))
+    AGE_DAYS=$((AGE_SECONDS / 86400))
+
+    if git diff --quiet flake.nix flake.lock 2>/dev/null; then
+      HAS_LOCAL_CHANGES=0
+    else
+      HAS_LOCAL_CHANGES=1
+    fi
+
+    if [ "$HAS_LOCAL_CHANGES" -eq 1 ]; then
+      echo "Local flake files have uncommitted changes."
+      echo "Skipping update to preserve local modifications."
+    elif [ "$AGE_DAYS" -gt 7 ]; then
+      if [ "$AGE_DAYS" -eq 1 ]; then
+        AGE_MSG="1 day old"
+      elif [ "$AGE_DAYS" -lt 30 ]; then
+        AGE_MSG="$AGE_DAYS days old"
+      elif [ "$AGE_DAYS" -lt 60 ]; then
+        AGE_MSG="1 month old"
+      else
+        AGE_MONTHS=$((AGE_DAYS / 30))
+        AGE_MSG="$AGE_MONTHS months old"
+      fi
+      echo "Local flake.lock is $AGE_MSG."
+      if [ "${EASYOS_NONINTERACTIVE:-}" = "true" ] || [ ! -t 0 ]; then
+        echo "Non-interactive build: skipping flake update."
+      else
+        printf "Would you like to update from GitHub? (y/N): "
+        read -r RESPONSE
+        if [ "$RESPONSE" = "y" ] || [ "$RESPONSE" = "Y" ]; then
+          echo "Updating flake inputs from GitHub..."
+          set +e
+          nix flake update --commit-lock-file 2>&1 | grep -v "warning: ignoring untrusted"
+          UPDATE_EXIT=$?
+          set -e
+          if [ "$UPDATE_EXIT" -ne 0 ]; then
+            echo "WARNING: Flake update failed; proceeding with local flake.lock."
           else
-            AGE_MONTHS=$((AGE_DAYS / 30))
-            AGE_MSG="$AGE_MONTHS months old"
-          fi
-          
-          echo "Local flake.lock is $AGE_MSG."
-          printf "Would you like to update from GitHub? (Y/n): "
-          read -r RESPONSE
-          if [ "$RESPONSE" = "n" ] || [ "$RESPONSE" = "N" ]; then
-            echo "Skipping update. Using local flake.lock."
-          else
-            echo "Updating flake inputs from GitHub..."
-            set +e
-            nix flake update --commit-lock-file 2>&1 | grep -v "warning: ignoring untrusted"
-            UPDATE_EXIT=$?
-            set -e
-            if [ $UPDATE_EXIT -ne 0 ]; then
-              echo "WARNING: Flake update failed; proceeding with local flake.lock."
-            else
-              echo "✓ Flake inputs updated successfully."
-            fi
+            echo "✓ Flake inputs updated successfully."
           fi
         else
-          echo "Local flake.lock is current (updated today). Skipping update."
-        fi
-      else
-        echo "No local flake.lock found. Fetching latest from GitHub..."
-        set +e
-        nix flake update --commit-lock-file 2>&1 | grep -v "warning: ignoring untrusted"
-        UPDATE_EXIT=$?
-        set -e
-        if [ $UPDATE_EXIT -ne 0 ]; then
-          echo "WARNING: Flake update failed."
+          echo "Skipping update. Using local flake.lock."
         fi
       fi
     else
-      echo "WARNING: No internet (or DNS/HTTP unavailable). Using local flake.lock; may be outdated."
+      echo "Local flake.lock is current (less than a week old). Skipping update."
     fi
-    
-    # Build the ISO
-    if [ "${SUPPRESS_XATTR_WARNINGS}" = "true" ]; then
-      set -o pipefail
-      nix build .#nixosConfigurations.iso.config.system.build.isoImage --impure --print-build-logs --accept-flake-config 2>&1 | \
-        grep -Evi "lgetxattr|lsetxattr|llistxattr|lremovexattr|read_attrs|write_attrs|^warning: Git tree .+ is dirty$"
-      BUILD_STATUS=$?
-      set +o pipefail
-      if [ $BUILD_STATUS -ne 0 ]; then
-        exit $BUILD_STATUS
-      fi
+  else
+    echo "No local flake.lock found. Fetching latest from GitHub..."
+    set +e
+    nix flake update --commit-lock-file 2>&1 | grep -v "warning: ignoring untrusted"
+    UPDATE_EXIT=$?
+    set -e
+    if [ "$UPDATE_EXIT" -ne 0 ]; then
+      echo "WARNING: Flake update failed."
+    fi
+  fi
+else
+  echo "WARNING: No internet (or DNS/HTTP unavailable). Using local flake.lock; may be outdated."
+fi
+
+echo "Running preflight checks (installer integrity)..."
+OPEN_EON=$(grep -Ec "<<'?E""ON'?" /workspace/flake.nix || true)
+CLOSE_EON=$(grep -Ec '^[[:space:]]*EON$' /workspace/flake.nix || true)
+OPEN_EOCRED=$(grep -Ec "<<E""OCRED" /workspace/flake.nix || true)
+CLOSE_EOCRED=$(grep -Ec '^[[:space:]]*EOCRED$' /workspace/flake.nix || true)
+if [ "$OPEN_EON" -ne "$CLOSE_EON" ] || [ "$OPEN_EOCRED" -ne "$CLOSE_EOCRED" ]; then
+  echo "" >&2
+  echo "ERROR: Preflight failed: heredoc markers mismatch in embedded installer." >&2
+  echo "       OPEN_EON=$OPEN_EON CLOSE_EON=$CLOSE_EON OPEN_EOCRED=$OPEN_EOCRED CLOSE_EOCRED=$CLOSE_EOCRED" >&2
+  echo "       Please fix the heredoc blocks in flake.nix (easyos-install.sh) and try again." >&2
+  exit 1
+fi
+echo "Preflight passed: installer heredocs OK."
+
+cd /workspace
+nix build .#nixosConfigurations.iso.config.system.build.isoImage --impure --print-build-logs --accept-flake-config
+
+# Find the ISO file - try multiple methods
+ISO_PATH=""
+
+# Method 1: Check if result/iso/ exists and has ISO files
+if [ -d "result/iso" ]; then
+  ISO_PATH=$(find result/iso -name "*.iso" -type f 2>/dev/null | head -1)
+fi
+
+# Method 2: If not found, check hydra-build-products
+if [ -z "$ISO_PATH" ] && [ -f "result/nix-support/hydra-build-products" ]; then
+  # Extract path from hydra-build-products (format: "file iso /path/to/file.iso")
+  ISO_PATH=$(cat result/nix-support/hydra-build-products | cut -d' ' -f3)
+  # Verify the file exists
+  if [ ! -f "$ISO_PATH" ]; then
+    ISO_PATH=""
+  fi
+fi
+
+# Method 3: Search the entire result tree
+if [ -z "$ISO_PATH" ]; then
+  ISO_PATH=$(find result -name "*.iso" -type f 2>/dev/null | head -1)
+fi
+
+if [ -z "$ISO_PATH" ]; then
+  echo "ERROR: Could not find ISO file" >&2
+  echo "DEBUG: Tried:" >&2
+  echo "  - result/iso/*.iso" >&2
+  echo "  - hydra-build-products path" >&2
+  echo "  - recursive search in result/" >&2
+  echo "DEBUG: result structure:" >&2
+  find result -type f 2>&1 | head -20 >&2
+  exit 1
+fi
+
+echo "Preparing iso-output/ (removing previous ISO files)..."
+find /workspace/iso-output -maxdepth 1 -type f -name "*.iso" -print -exec rm -f {} + 2>/dev/null || true
+
+echo "Transferring ISO to workspace..."
+if mv -v "$ISO_PATH" /workspace/iso-output/ 2>/dev/null; then
+  echo "ISO moved to iso-output/"
+else
+  cp -v "$ISO_PATH" /workspace/iso-output/
+  echo "ISO copied to iso-output/ (source in nix store retained)"
+fi
+
+NEW_HASH=$(calc_source_hash || echo "unknown")
+if [ -n "$NEW_HASH" ] && [ "$NEW_HASH" != "unknown" ]; then
+  echo "$NEW_HASH" > "$STAMP_FILE" 2>/dev/null || true
+fi
+
+if [ "${EASYOS_EXPORT_ARTIFACTS:-}" = "true" ] && [ -n "${EASYOS_ARTIFACTS_DIR:-}" ]; then
+  ARTIFACT_DIR="${EASYOS_ARTIFACTS_DIR%/}"
+  mkdir -p "$ARTIFACT_DIR"
+  find "$ARTIFACT_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null || true
+
+  BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  ISO_BASENAME=$(basename "$ISO_PATH" 2>/dev/null || echo "unknown.iso")
+  ISO_BYTES=$(stat -c %s "$ISO_PATH" 2>/dev/null || echo "unknown")
+  ISO_SIZE_HUMAN=$(du -h "$ISO_PATH" 2>/dev/null | head -1 | cut -f1 || echo "unknown")
+  RESULT_PATH=$(readlink -f result 2>/dev/null || true)
+  SYSTEM_TOPLEVEL=$(nix eval --raw '.#nixosConfigurations.iso.config.system.build.toplevel' 2>/dev/null || true)
+
+  {
+    echo "Build time (UTC): $BUILD_TIME"
+    echo "ISO filename: $ISO_BASENAME"
+    echo "ISO size: ${ISO_SIZE_HUMAN} (${ISO_BYTES} bytes)"
+    echo "Workspace hash: ${NEW_HASH:-unknown}"
+    echo "Result store path: ${RESULT_PATH:-unknown}"
+    echo "System toplevel: ${SYSTEM_TOPLEVEL:-unknown}"
+  } > "$ARTIFACT_DIR/build-info.txt"
+
+  if [ -n "$RESULT_PATH" ] && [ -e "$RESULT_PATH" ]; then
+    nix path-info --json "$RESULT_PATH" > "$ARTIFACT_DIR/result-path-info.json" 2>/dev/null || true
+    nix-store -q --tree "$RESULT_PATH" > "$ARTIFACT_DIR/result-tree.txt" 2>/dev/null || true
+    nix-store -q --references "$RESULT_PATH" > "$ARTIFACT_DIR/result-references.txt" 2>/dev/null || true
+    nix-store -q --requisites "$RESULT_PATH" > "$ARTIFACT_DIR/result-closure.txt" 2>/dev/null || true
+  fi
+
+  DRV_PATH=$(nix path-info --derivation result 2>/dev/null || true)
+  if [ -n "$DRV_PATH" ]; then
+    if nix log "$DRV_PATH" > "$ARTIFACT_DIR/nix-build.log" 2>/dev/null; then
+      :
     else
-      nix build .#nixosConfigurations.iso.config.system.build.isoImage --impure --print-build-logs --accept-flake-config
-      BUILD_STATUS=$?
-      if [ $BUILD_STATUS -ne 0 ]; then
-        exit $BUILD_STATUS
-      fi
+      rm -f "$ARTIFACT_DIR/nix-build.log" 2>/dev/null || true
     fi
-    
-    # Find and move the ISO into workspace (clean older ISOs to avoid duplicates)
-    ISO_PATH=$(find result/iso -name "*.iso" -type f 2>/dev/null | head -1)
-    if [ -n "$ISO_PATH" ]; then
-      echo ""
-      echo "Preparing iso-output/ (removing previous ISO files)..."
-      find /workspace/iso-output -maxdepth 1 -type f -name "*.iso" -print -exec rm -f {} + 2>/dev/null || true
-      echo "Transferring ISO to workspace..."
-      # mv may fail when crossing filesystems or from read-only nix store; fall back to copy
-      if mv -v "$ISO_PATH" /workspace/iso-output/ 2>/dev/null; then
-        echo "ISO moved to iso-output/"
-      else
-        cp -v "$ISO_PATH" /workspace/iso-output/
-        echo "ISO copied to iso-output/ (source in nix store retained)"
-      fi
-    else
-      echo "ERROR: Could not find ISO file" >&2
-      exit 1
-    fi
-  '
+  fi
+
+  INSTALLER_SRC=$(nix eval --raw '.#nixosConfigurations.iso.config.environment.etc."easyos-install.sh".source' 2>/dev/null || true)
+  if [ -n "$INSTALLER_SRC" ] && [ -f "$INSTALLER_SRC" ]; then
+    cp "$INSTALLER_SRC" "$ARTIFACT_DIR/easyos-install.sh"
+    chmod 0755 "$ARTIFACT_DIR/easyos-install.sh" 2>/dev/null || true
+  fi
+
+  cp /workspace/flake.nix "$ARTIFACT_DIR/flake.nix.snapshot" 2>/dev/null || true
+  if [ -f /workspace/flake.lock ]; then
+    cp /workspace/flake.lock "$ARTIFACT_DIR/flake.lock.snapshot" 2>/dev/null || true
+  fi
+
+  chmod -R a+r "$ARTIFACT_DIR" 2>/dev/null || true
+fi
+EOS
 
   BUILD_EXIT=$?
+  if [ $BUILD_EXIT -eq 0 ]; then
+    BUILD_PERFORMED=true
+  fi
 fi
 echo ""
 
@@ -286,16 +522,28 @@ if [ $BUILD_EXIT -ne 0 ]; then
 fi
 
 if [ $BUILD_EXIT -eq 0 ]; then
+  FINAL_HASH=""
+  if [ -f "$STAMP_FILE" ]; then
+    FINAL_HASH=$(<"$STAMP_FILE") || FINAL_HASH=""
+  fi
   # ISO should now be in iso-output/
   ISO=$(find iso-output -name "*.iso" -type f 2>/dev/null | head -1)
   
   if [ -n "$ISO" ]; then
     SIZE=$(du -h "$ISO" | cut -f1)
     echo ""
-    echo "✓ ISO built successfully!"
+    if [ "$BUILD_PERFORMED" = true ]; then
+      echo "✓ ISO built successfully!"
+    else
+      echo "✓ ISO already up to date (no rebuild needed)."
+    fi
     echo "  Location: $ISO"
     echo "  Size: $SIZE"
     echo ""
+    # Persist current source hash stamp for rebuild detection on next run
+    if [ -n "$FINAL_HASH" ]; then
+      echo "$FINAL_HASH" > "$ISO_OUTPUT_DIR/.easyos-source-hash" 2>/dev/null || true
+    fi
     
     # Ventoy auto-copy
     if [ "$VENTOY_COPY" = true ]; then
@@ -304,7 +552,7 @@ if [ $BUILD_EXIT -eq 0 ]; then
       
       # Portable scan for Ventoy mount without process substitution (works in strict shells)
       # 1) Try to find a mountpoint with "ventoy" in its path from the mount table
-      VENTOY_MOUNT=$(mount | awk '{print $3}' | awk 'BEGIN{IGNORECASE=1} /ventoy/ {print; exit}')
+      VENTOY_MOUNT=$(mount | cut -d' ' -f3 | grep -i ventoy | head -1)
       # 2) If not found, probe common removable media roots
       if [ -z "$VENTOY_MOUNT" ]; then
         for d in /run/media/*/* /media/* /mnt/*; do
@@ -364,6 +612,11 @@ if [ $BUILD_EXIT -eq 0 ]; then
     echo "     $0 --vm"
     echo ""
     echo "  Inside the booted ISO, run: sudo /etc/easyos-install.sh"
+    if [ "$EXPORT_ARTIFACTS" = true ] && [ "$VM_UPDATE" = false ] && [ "$BUILD_PERFORMED" = true ]; then
+      echo ""
+      echo "Artifacts exported to: $ARTIFACTS_DIR_HOST"
+      echo "  Includes: installer script, build metadata, nix logs"
+    fi
   else
     echo "ERROR: ISO file not found in iso-output/" >&2
     exit 1
@@ -385,8 +638,8 @@ if [ "$VM_TEST" = true ]; then
   fi
   
   # Check available RAM
-  TOTAL_RAM=$(free -m | awk '/^Mem:/ {print $2}')
-  AVAILABLE_RAM=$(free -m | awk '/^Mem:/ {print $7}')
+  TOTAL_RAM=$(free -m | grep '^Mem:' | tr -s ' ' | cut -d' ' -f2)
+  AVAILABLE_RAM=$(free -m | grep '^Mem:' | tr -s ' ' | cut -d' ' -f7)
   VM_RAM=8192  # 8GB for VM
   REQUIRED_HOST_RAM=8192  # 8GB minimum for host
   REQUIRED_TOTAL=$((VM_RAM + REQUIRED_HOST_RAM))

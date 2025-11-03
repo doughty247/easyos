@@ -15,7 +15,18 @@
   "network": {
     "interface": "wlan0",
     "ssid": "EASY-Setup",
-    "psk": "changeme-strong-pass"
+    "psk": "changeme-strong-pass",
+    "hotspotSubnet": "10.42.0.0/24",
+    "hotspotIP": "10.42.0.1",
+    "hotspotDHCPStart": "10.42.0.10",
+    "hotspotDHCPEnd": "10.42.0.250",
+    "wifiChannel": "6",
+    "clientIsolation": true,
+    "qosEnabled": true,
+    "qosDownloadMbps": "100",
+    "qosUploadMbps": "20",
+    "qosAutoDetect": false,
+    "wifiPowerSave": false
   },
 
   "backup": {
