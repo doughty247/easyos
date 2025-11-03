@@ -483,10 +483,22 @@ if [ "$ENCRYPT" -eq 1 ]; then
     }
 
   # Extract the printed recovery key robustly from output
+  # systemd-cryptenroll may print different formats across versions:
+  #  - 8 groups of 5 digits (classic numeric)
+  #  - Alphanumeric groups (letters/digits) separated by dashes
+  #  - On some builds, the key is shown on the line after a colon
   RECOVERY_KEY=$(printf "%s\n" "$RECOVERY_OUT" \
     | tr -d '\r' \
-    | grep -Eo '([0-9]{5}-){7}[0-9]{5}' \
+    | grep -Eo '([A-Za-z0-9]{4,}-){3,}[A-Za-z0-9]{4,}|([0-9]{5}-){7}[0-9]{5}' \
     | head -1 || true)
+  if [ -z "$RECOVERY_KEY" ]; then
+    # Fallback: take the first non-empty line following the colon on the
+    # "secret recovery key" message block
+    RECOVERY_KEY=$(printf "%s\n" "$RECOVERY_OUT" \
+      | tr -d '\r' \
+      | sed -n '/secret recovery key/,$p' \
+      | sed -n '2{/^\s*$/d; s/^\s*//; p; q}')
+  fi
   if [ -z "$RECOVERY_KEY" ]; then
     echo "$RECOVERY_OUT"
     echo "WARNING: Could not parse recovery key from systemd-cryptenroll output."
@@ -494,6 +506,9 @@ if [ "$ENCRYPT" -eq 1 ]; then
     # Reopen using temporary passphrase to proceed
     echo -n "$TEMP_PASS" | cryptsetup open "$ROOT" cryptroot --key-file -
     CRYPT_DEV="/dev/mapper/cryptroot"
+    # Persist full output for later retrieval
+    mkdir -p /mnt/etc/easy
+    printf "%s\n" "$RECOVERY_OUT" > /mnt/etc/easy/recovery-output.txt 2>/dev/null || true
   else
     # Validate the recovery key before removing the temporary passphrase
     echo "  Validating recovery key by opening the LUKS device..."
@@ -519,20 +534,29 @@ if [ "$ENCRYPT" -eq 1 ]; then
     mount "$BOOT" /mnt/boot
   fi
   
-  # Persist recovery key securely on target
+  # Persist recovery key or output for troubleshooting
   mkdir -p /mnt/etc/easy
-  printf "%s\n" "$RECOVERY_KEY" > /mnt/etc/easy/recovery.key
-  chmod 600 /mnt/etc/easy/recovery.key
-  echo "  Recovery key saved to /etc/easy/recovery.key on the installed system."
+  if [ -n "$RECOVERY_KEY" ]; then
+    printf "%s\n" "$RECOVERY_KEY" > /mnt/etc/easy/recovery.key
+    chmod 600 /mnt/etc/easy/recovery.key
+    echo "  Recovery key saved to /etc/easy/recovery.key on the installed system."
+  else
+    # Leave recovery-output.txt written above for analysis
+    echo "  NOTE: Recovery key parse failed; full enroll output saved to /etc/easy/recovery-output.txt"
+  fi
   echo ""
   echo "══════════════════════════════════════════════════════════════"
   echo "RECOVERY KEY - Scan this QR code or write it down:"
   echo ""
-  echo "  $RECOVERY_KEY"
+  if [ -n "$RECOVERY_KEY" ]; then
+    echo "  $RECOVERY_KEY"
+  else
+    echo "  (not parsed; see /etc/easy/recovery-output.txt)"
+  fi
   echo ""
   # Display QR code for easy scanning with phone
-  if command -v qrencode >/dev/null 2>&1; then
-    qrencode -t ANSIUTF8 -m 2 "$RECOVERY_KEY"
+  if command -v qrencode >/dev/null 2>&1 && [ -n "$RECOVERY_KEY" ]; then
+    qrencode -t ANSIUTF8 -m 2 "$RECOVERY_KEY" || qrencode -t UTF8 -m 2 "$RECOVERY_KEY" || true
   fi
   echo ""
   echo "══════════════════════════════════════════════════════════════"
