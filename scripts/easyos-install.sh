@@ -585,9 +585,14 @@ if [ "$ENCRYPT" -eq 1 ]; then
   boot.initrd.luks.devices.cryptroot = {
     device = lib.mkForce "/dev/disk/by-uuid/$LUKS_UUID";
     preLVM = lib.mkForce true;
-    # Try TPM2 auto-unlock; if it fails, prompt for recovery key interactively
+    # Enable TPM2 auto-unlock via systemd-cryptsetup
+    # This passes tpm2-device=auto to crypttab, which systemd-cryptsetup uses
+    # to attempt TPM unlock before prompting for passphrase
     crypttabExtraOpts = [ "tpm2-device=auto" ];
   };
+
+  # Ensure TPM2 kernel modules are loaded in initrd for unlock
+  boot.initrd.availableKernelModules = [ "tpm_crb" "tpm_tis" ];
 
   # Ensure cryptsetup and systemd-cryptenroll are available
   environment.systemPackages = with pkgs; [
