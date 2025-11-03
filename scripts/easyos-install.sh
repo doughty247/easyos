@@ -567,7 +567,8 @@ if [ "$ENCRYPT" -eq 1 ]; then
   # Prepare easy-encryption.nix for TPM auto-unlock
   LUKS_UUID=$(cryptsetup luksUUID "$ROOT")
   if [ $TPM_AVAILABLE -eq 1 ]; then
-    cat > /mnt/etc/nixos/easyos/easy-encryption.nix <<'EON'
+    # Write temporarily outside the repo; we'll move it after cloning
+    cat > /mnt/etc/nixos/easy-encryption.nix <<EON
 { config, lib, pkgs, ... }:
 {
   # Enable TPM2 stack for automatic unlocking
@@ -595,7 +596,7 @@ if [ "$ENCRYPT" -eq 1 ]; then
 EON
   else
     # No TPM - encryption only uses recovery key
-    cat > /mnt/etc/nixos/easyos/easy-encryption.nix <<'EON'
+    cat > /mnt/etc/nixos/easy-encryption.nix <<EON
 { config, lib, pkgs, ... }:
 {
   # Use systemd in initrd for better unlock UX
@@ -622,6 +623,11 @@ fi
 echo "⚙ Cloning easyos flake from GitHub..."
 mkdir -p /mnt/etc/nixos
 GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/doughty247/easyos.git /mnt/etc/nixos/easyos
+
+# Move generated encryption configuration into the repo if it exists
+if [ -f /mnt/etc/nixos/easy-encryption.nix ]; then
+  mv -f /mnt/etc/nixos/easy-encryption.nix /mnt/etc/nixos/easyos/easy-encryption.nix
+fi
 
 echo "⚙ Importing hardware-configuration.nix into easyos..."
 cp /mnt/etc/nixos/hardware-configuration.nix /mnt/etc/nixos/easyos/
