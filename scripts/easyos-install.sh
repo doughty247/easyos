@@ -578,13 +578,15 @@ if [ "$ENCRYPT" -eq 1 ]; then
 
   # Use systemd in initrd for TPM2 unlock support
   boot.initrd.systemd.enable = lib.mkForce true;
+  # Allow emergency shell access in initrd for recovery/debug
+  boot.initrd.systemd.emergencyAccess = lib.mkForce true;
 
   # Configure LUKS device with TPM2 auto-unlock
   boot.initrd.luks.devices.cryptroot = {
     device = lib.mkForce "/dev/disk/by-uuid/$LUKS_UUID";
     preLVM = lib.mkForce true;
-    # Allow TPM unlock with fallback to recovery key
-    crypttabExtraOpts = [ "tpm2-device=auto" "headless=1" "timeout=0" ];
+    # Try TPM2 auto-unlock; if it fails, prompt for recovery key interactively
+    crypttabExtraOpts = [ "tpm2-device=auto" ];
   };
 
   # Ensure cryptsetup and systemd-cryptenroll are available
@@ -601,6 +603,7 @@ EON
 {
   # Use systemd in initrd for better unlock UX
   boot.initrd.systemd.enable = lib.mkForce true;
+  boot.initrd.systemd.emergencyAccess = lib.mkForce true;
 
   # Configure LUKS device (manual unlock required)
   boot.initrd.luks.devices.cryptroot = {
