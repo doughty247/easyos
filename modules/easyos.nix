@@ -143,12 +143,13 @@ NETWORKING
     ping -c4 8.8.8.8                    Test internet connectivity
 
 HOTSPOT & ACCESS POINT
-    systemctl start easyos-hotspot      Start Wi-Fi hotspot
-    systemctl stop easyos-hotspot       Stop Wi-Fi hotspot
-    systemctl status easyos-hotspot     Check hotspot status
+  systemctl start easyos-hotspot      Start Wi‑Fi hotspot
+  systemctl stop easyos-hotspot       Stop Wi‑Fi hotspot
+  systemctl status easyos-hotspot     Check hotspot status
 
-    Features: Router-grade NAT/masquerading, DHCP/DNS server,
-              captive portal detection, client isolation support
+  Features: Open SSID for first‑run (no WPA), router‑grade NAT/masquerading,
+        DHCP/DNS via NetworkManager, captive portal on port 8088
+        (limited to a single concurrent client), client isolation support
 
 NETWORK PERFORMANCE & QoS
     cat /etc/easy/qos-current.json                Current QoS settings
@@ -263,8 +264,9 @@ EOF
         echo "║              Welcome to EASYOS First-Run Setup            ║"
         echo "╚════════════════════════════════════════════════════════════╝"
         echo ""
-        echo "Logged in as: ${adminUser}"
-        echo "Default password: easyos (change immediately!)"
+  echo "Logged in as: ${adminUser}"
+  echo "Password: If installed via the ISO, use the admin password you set."
+  echo "          Default 'easyos' applies only for direct flake builds."
         echo ""
         echo "Setup Options:"
         echo ""

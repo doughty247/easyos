@@ -1,51 +1,52 @@
 # easyos
 
-NixOS-based declarative appliance OS. Configure everything via `/etc/easy/config.json` and apply changes with a single command.
+NixOS-based declarative appliance OS. Configure everything via `/etc/easy/config.json` and apply changes with a single command. A guided installer builds your system from the latest GitHub sources using Nix binary caches.
 
 ## Features
 
-- **Simple Installation** — Guided installer with automatic partitioning and setup
-- **Easy Network Setup** — Automatic Wi-Fi scanning and configuration via nmtui
-- **Built-in Help** — Type `easy-help` for quick commands and documentation
-- **Update Channels** — Choose stable, beta, or preview channels
-- **Web UI** — Manage your system via browser at http://localhost:8080
-- **Hotspot Mode** — Automatic Wi-Fi access point for initial setup (post-install)
-- **Btrfs Backups** — Automated snapshots and backups to USB/external drives
-- **Storage Expansion** — Add drives and expand storage dynamically
+- Simple installation — Guided, destructive install with Btrfs subvolumes
+- Network-first installer — Requires internet; prompts you to configure via `nmtui`
+- Built-in help — Type `easy-help` for quick commands and docs
+- Update channels — stable, beta, preview
+- Web UI — http://<device-ip>:8088
+- Hotspot mode — Open guest SSID for first-run (no WPA); captive portal on 8088; single concurrent session
+- Backups — Automated Btrfs snapshots and backups to USB/external drives
+- Storage expansion — Add drives and expand storage declaratively
+- Optional encryption — LUKS2 with TPM2 auto-unlock and printed recovery key
 
-## Quick Start
+## Quick start
 
-### Building the ISO
+### Build the ISO
 
-On a Linux system with Docker/Podman:
+On Linux with Docker or Podman:
 ```bash
 git clone https://github.com/doughty247/easyos.git
-cd easyos
+cd easyos/easyos
 ./build-iso-docker.sh --ventoy  # Auto-copies to Ventoy USB if detected
 ```
 
-### Installation
+### Install
 
 1. Boot from the ISO
-2. Connect to network (automatically prompted if needed)
-3. Follow the guided installer
-4. Set your hostname, username, and passwords
-5. Choose your update channel (stable/beta/preview)
+2. If prompted, configure network with `nmtui` (internet is required)
+3. Run the guided installer (auto-runs on login, or `sudo /etc/easyos-install.sh`)
+4. Choose hostname, admin user, and passwords
+5. (Optional) Enable disk encryption with TPM2; save the printed recovery key (QR shown)
 6. Reboot into your new system
 
-### First Boot
+### First boot
 
-On first boot, the system will:
-- Auto-login as your chosen admin user
-- Display setup options and helpful commands
-- Start the Wi-Fi hotspot if Wi-Fi hardware is available (no Ethernet)
-- Make the web UI available at your device's IP
+The system will:
+- Auto-login as your admin user
+- Start an open Wi‑Fi hotspot (if Wi‑Fi is present and no Ethernet)
+- Expose a captive portal at http://10.42.0.1:8088/ (limited to one active client)
+- Make the web UI available at http://<device-ip>:8088/
 
 Type `easy-help` anytime to see available commands and documentation.
 
 ## Configuration
 
-Edit `/etc/easy/config.json` to configure your system:
+Edit `/etc/easy/config.json`:
 
 ```json
 {
@@ -61,7 +62,8 @@ Edit `/etc/easy/config.json` to configure your system:
   "mode": "first-run",
   "network": {
     "ssid": "EASY-Setup",
-    "psk": "easyos123"
+    "wifiChannel": "6",
+    "clientIsolation": true
   },
   "backup": {
     "enable": true,
@@ -78,49 +80,44 @@ Apply changes:
 sudo nixos-rebuild switch --impure --flake /etc/nixos/easyos#easyos
 ```
 
-## Useful Commands
+## Useful commands
 
 ```bash
-easy-help                      # Show all available commands
-sudo nmtui                     # Configure network connections
-sudo systemctl start easyos-hotspot   # Start Wi-Fi hotspot
-sudo systemctl start easyos-backup    # Run backup now
-cat /etc/easy/channel          # Check your update channel
+easy-help                              # Show quick reference
+sudo nmtui                             # Configure network
+sudo systemctl start easyos-hotspot    # Start Wi‑Fi hotspot
+sudo systemctl start easyos-backup     # Run backup now
+cat /etc/easy/channel                  # Check update channel
 ```
 
-## Update Channels
+## Update channels
 
-- **stable** — LTS kernel, stable features (recommended)
-- **beta** — LTS kernel, beta features
-- **preview** — Latest kernel, bleeding edge (manual build only)
+- stable — LTS kernel, stable features (recommended)
+- beta — LTS kernel, beta features
+- preview — Latest kernel, bleeding edge (manual build only)
 
-## System Architecture
+## System architecture
 
-- **OS Base** — NixOS 24.11 with flakes
-- **Bootloader** — systemd-boot (UEFI only)
-- **Filesystem** — Btrfs with compression and subvolumes
-- **Network** — NetworkManager for easy Wi-Fi/Ethernet management
-- **Credentials** — SHA-512 hashed passwords set during installation
+- OS base — NixOS 24.11 with flakes
+- Bootloader — systemd‑boot (UEFI) or GRUB (BIOS), auto‑selected by installer
+- Filesystem — Btrfs with compression and subvolumes
+- Network — NetworkManager for Wi‑Fi/Ethernet, captive portal on 8088 during setup
+- Credentials — SHA‑512 hashed passwords set during installation (admin/root)
+- Encryption — LUKS2 with TPM2 auto‑unlock (if selected) and recovery key
 
-## Building from Source
+## Build from source
 
-**Docker/Podman method (recommended):**
+Containerized (recommended):
 ```bash
 ./build-iso-docker.sh          # Build ISO in container
-./build-iso-docker.sh --vm     # Copy to VM directory
+./build-iso-docker.sh --vm     # Boot ISO in a VM for testing
 ./build-iso-docker.sh --ventoy # Auto-copy to Ventoy USB
-```
-
-**Native NixOS:**
-```bash
-nix build .#isoImage-stable    # Build stable channel ISO
-nix build .#isoImage-beta      # Build beta channel ISO
 ```
 
 ## Support
 
-Issues and pull requests welcome at https://github.com/doughty247/easyos
+Issues and pull requests welcome: https://github.com/doughty247/easyos
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License – see [LICENSE](LICENSE).

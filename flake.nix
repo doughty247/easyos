@@ -156,12 +156,13 @@ EasyOS Installer - Quick Reference
 GETTING STARTED
     easyos-install                      Launch the installer
     sudo nmtui                          Configure network (if needed)
+  Note: Internet is required (installer fetches latest flake and uses caches)
 
 INSTALLER FEATURES
     • Automatic disk partitioning with Btrfs
     • Optional TPM2-backed LUKS encryption
     • QR code display for recovery keys
-    • Network connectivity verification
+  • Network connectivity verification (prompts for nmtui if offline)
     • Update channel selection (stable/beta/preview)
 
 SYSTEM INFORMATION
@@ -188,7 +189,8 @@ DOCUMENTATION
     GitHub: https://github.com/doughty247/easyos
 
 POST-INSTALL FEATURES
-    • Router-grade WiFi hotspot (NAT, DHCP, DNS)
+  • Open Wi‑Fi hotspot (no WPA) with captive portal on 8088 (single client)
+  • Router-grade NAT, DHCP/DNS via NetworkManager
     • CAKE QoS with network auto-profiling
     • BBR congestion control
     • Web UI at http://<ip>:8088

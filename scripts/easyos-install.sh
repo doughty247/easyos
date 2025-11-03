@@ -482,25 +482,32 @@ if [ "$ENCRYPT" -eq 1 ]; then
       exit 1
     }
 
-  # Extract recovery key robustly from systemd-cryptenroll output
+  # Extract the printed recovery key robustly from output
   RECOVERY_KEY=$(printf "%s\n" "$RECOVERY_OUT" \
-    | awk '/secret recovery key/ {getline; print $0}' \
     | tr -d '\r' \
-    | xargs || true)
+    | grep -Eo '([0-9]{5}-){7}[0-9]{5}' \
+    | head -1 || true)
   if [ -z "$RECOVERY_KEY" ]; then
     echo "$RECOVERY_OUT"
-    echo "ERROR: Could not parse recovery key from systemd-cryptenroll output."
-    exit 1
+    echo "WARNING: Could not parse recovery key from systemd-cryptenroll output."
+    echo "         Keeping temporary passphrase to avoid lockout."
+    # Reopen using temporary passphrase to proceed
+    echo -n "$TEMP_PASS" | cryptsetup open "$ROOT" cryptroot --key-file -
+    CRYPT_DEV="/dev/mapper/cryptroot"
+  else
+    # Validate the recovery key before removing the temporary passphrase
+    echo "  Validating recovery key by opening the LUKS device..."
+    if echo -n "$RECOVERY_KEY" | cryptsetup open "$ROOT" cryptroot --key-file -; then
+      CRYPT_DEV="/dev/mapper/cryptroot"
+      echo "  Recovery key validated. Removing temporary passphrase..."
+      echo -n "$TEMP_PASS" | cryptsetup luksRemoveKey "$ROOT" - || true
+    else
+      echo "WARNING: Unlock with recovery key failed."
+      echo "         Keeping temporary passphrase to avoid lockout."
+      echo -n "$TEMP_PASS" | cryptsetup open "$ROOT" cryptroot --key-file -
+      CRYPT_DEV="/dev/mapper/cryptroot"
+    fi
   fi
-
-  # Remove the temporary passphrase slot (no longer needed)
-  echo "  Removing temporary passphrase..."
-  echo -n "$TEMP_PASS" | cryptsetup luksRemoveKey "$ROOT" - || true
-
-  # Reopen device for installation using the recovery key
-  echo "  Reopening encrypted device with recovery key..."
-  echo -n "$RECOVERY_KEY" | cryptsetup open "$ROOT" cryptroot --key-file -
-  CRYPT_DEV="/dev/mapper/cryptroot"
 
   # Remount all subvolumes for installation
   mount -o subvol=root,compress=zstd "$CRYPT_DEV" /mnt
@@ -542,8 +549,6 @@ if [ "$ENCRYPT" -eq 1 ]; then
   # Enable TPM2 stack for automatic unlocking
   security.tpm2 = {
     enable = lib.mkForce true;
-    # Ensure TPM kernel modules load early
-    pkgs = [ pkgs.tpm2-tss ];
   };
 
   # Use systemd in initrd for TPM2 unlock support
@@ -640,9 +645,12 @@ cat > /mnt/etc/nixos/easyos/easy-credentials.nix <<EOCRED
   users.users.${ADMIN} = {
     isNormalUser = lib.mkForce true;
     group = lib.mkForce "${ADMIN}";
+    # Keep both forms to cover first boot and persistent generations
+    initialHashedPassword = lib.mkForce "${ADMIN_HASH}";
     hashedPassword = lib.mkForce "${ADMIN_HASH}";
   };
 
+  users.users.root.initialHashedPassword = lib.mkForce "${ROOT_HASH}";
   users.users.root.hashedPassword = lib.mkForce "${ROOT_HASH}";
 }
 EOCRED

@@ -36,8 +36,7 @@ in {
 
   config = lib.mkIf (config.easyos.hotspot.enable && hotspotEnabled) {
     assertions = [
-      { assertion = ssid != null && psk != null; message = "hotspot: SSID/PSK must be set."; }
-      { assertion = lib.stringLength psk >= 8; message = "hotspot: PSK must be at least 8 characters for WPA2."; }
+      { assertion = ssid != null; message = "hotspot: SSID must be set."; }
     ];
 
     # Network performance tuning is handled by network-performance.nix module
@@ -112,8 +111,7 @@ in {
           ipv4.method shared \
           ipv4.addresses ${hotspotIP}/24 \
           ipv6.method disabled \
-          wifi-sec.key-mgmt wpa-psk \
-          wifi-sec.psk "${psk}"
+          wifi-sec.key-mgmt none
         
         # Activate the connection
         ${pkgs.networkmanager}/bin/nmcli connection up easyos-hotspot || {
@@ -140,7 +138,10 @@ in {
           echo "No WAN interface found or WAN is same as WiFi - NAT not configured"
         fi
         
-        # DNS hijacking for captive portal detection
+        # Limit captive portal to a single concurrent connection from hotspot subnet
+        ${pkgs.iptables}/bin/iptables -A INPUT -i "$WIFI_IFACE" -p tcp --dport ${toString captivePort} -m connlimit --connlimit-above 1 --connlimit-mask 0 -j REJECT || true
+
+  # DNS hijacking for captive portal detection
         # Redirect all DNS queries from hotspot clients to our local DNS
         ${pkgs.iptables}/bin/iptables -t nat -A PREROUTING -i "$WIFI_IFACE" -p udp --dport 53 -j DNAT --to ${hotspotIP}:53
         ${pkgs.iptables}/bin/iptables -t nat -A PREROUTING -i "$WIFI_IFACE" -p tcp --dport 53 -j DNAT --to ${hotspotIP}:53
@@ -154,7 +155,9 @@ in {
         
         # Clean up iptables rules
         WIFI_IFACE=$(${pkgs.networkmanager}/bin/nmcli -t -f DEVICE,TYPE device 2>/dev/null | ${pkgs.gnugrep}/bin/grep ':wifi$' | ${pkgs.coreutils}/bin/cut -d: -f1 | ${pkgs.coreutils}/bin/head -1 || true)
+        WAN_IFACE=$(${pkgs.iproute2}/bin/ip route | ${pkgs.gnugrep}/bin/grep '^default' | ${pkgs.gawk}/bin/awk '{print $5}' | ${pkgs.coreutils}/bin/head -1 || true)
         if [ -n "$WIFI_IFACE" ]; then
+          ${pkgs.iptables}/bin/iptables -D INPUT -i "$WIFI_IFACE" -p tcp --dport ${toString captivePort} -m connlimit --connlimit-above 1 --connlimit-mask 0 -j REJECT 2>/dev/null || true
           ${pkgs.iptables}/bin/iptables -t nat -D PREROUTING -i "$WIFI_IFACE" -p udp --dport 53 -j DNAT --to ${hotspotIP}:53 2>/dev/null || true
           ${pkgs.iptables}/bin/iptables -t nat -D PREROUTING -i "$WIFI_IFACE" -p tcp --dport 53 -j DNAT --to ${hotspotIP}:53 2>/dev/null || true
           
