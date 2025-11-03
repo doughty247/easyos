@@ -62,9 +62,6 @@
 
                 # Ensure tooling like systemd-cryptenroll is available post-install
                 environment.systemPackages = [ pkgs.systemd ];
-
-                # Ship the flake sources into the installed system for convenience
-                environment.etc."nixos/easyos".source = ./.;
               }
             ]
             # Optional imports written by the installer at install-time

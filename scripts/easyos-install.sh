@@ -450,11 +450,11 @@ if [ "$ENCRYPT" -eq 1 ]; then
 
   # Enroll TPM2 with device closed (proper production setup)
   if [ $TPM_AVAILABLE -eq 1 ]; then
-    echo "  Enrolling TPM2 unlock (PCR 7 - Secure Boot state)..."
+    echo "  Enrolling TPM2 unlock (PCRs 0+2+7 - firmware, kernel, Secure Boot state)..."
     ENROLL_TPM_OUT=$(systemd-cryptenroll "$ROOT" \
       --unlock-key-file=<(printf "%s" "$TEMP_PASS") \
       --tpm2-device=auto \
-      --tpm2-pcrs=7 \
+      --tpm2-pcrs=0+2+7 \
       --wipe-slot=tpm2 2>&1) || {
         echo "WARNING: systemd-cryptenroll TPM2 enrollment failed"
         echo "$ENROLL_TPM_OUT"
@@ -464,7 +464,7 @@ if [ "$ENCRYPT" -eq 1 ]; then
 
     if [ $TPM_AVAILABLE -eq 1 ]; then
       echo "  ✓ TPM2 enrollment successful"
-      echo "    Bound to PCR 7 (Secure Boot state)"
+      echo "    Bound to PCRs 0,2,7 (firmware+kernel+Secure Boot)"
       echo "    Your system will auto-unlock if:"
       echo "    - TPM is present"
       echo "    - Secure Boot state unchanged"
