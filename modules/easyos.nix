@@ -98,6 +98,12 @@ in {
     systemd.network.enable = false;
     networking.wireless.enable = false; # Disable wpa_supplicant in favor of NetworkManager
 
+    # Fix systemd random seed warnings by ensuring proper permissions
+    systemd.tmpfiles.rules = [
+      "d /var/lib/systemd 0755 root root -"
+      "d /var/lib/systemd/random-seed 0700 root root -"
+    ];
+
     # SSH access (password auth off by default, enabled during first-run)
     services.openssh = {
       enable = true;

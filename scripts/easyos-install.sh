@@ -381,7 +381,13 @@ else
 fi
 if [ "$BOOT_MODE" = "uefi" ] || { [ "$BOOT_MODE" = "bios" ] && [ -n "${BOOT:-}" ]; }; then
   mount "$BOOT" /mnt/boot
+  # Restrict boot partition permissions to fix systemd random seed warnings
+  chmod 755 /mnt/boot
 fi
+
+# Create systemd random seed directory with proper permissions
+mkdir -p /mnt/var/lib/systemd
+chmod 755 /mnt/var/lib/systemd
 
 echo "⚙ Creating 8GiB swapfile (with no CoW)..."
 # Create swapfile on btrfs correctly: set NOCOW before writing
