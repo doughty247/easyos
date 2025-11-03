@@ -448,13 +448,15 @@ if [ "$ENCRYPT" -eq 1 ]; then
     echo "  TPM device detected: $(ls /dev/tpm* | head -1)"
   fi
 
-  # Enroll TPM2 with device closed (proper production setup)
+  # Enroll TPM2 with device closed (initial enrollment)
   if [ $TPM_AVAILABLE -eq 1 ]; then
-    echo "  Enrolling TPM2 unlock (PCRs 0+2+7 - firmware, kernel, Secure Boot state)..."
+    # Use PCR 7 only for stability across kernel/firmware updates.
+    # We'll also re-enroll on first boot from the installed system to bind to its boot chain.
+    echo "  Enrolling TPM2 unlock (PCR 7 - Secure Boot state)..."
     ENROLL_TPM_OUT=$(systemd-cryptenroll "$ROOT" \
       --unlock-key-file=<(printf "%s" "$TEMP_PASS") \
       --tpm2-device=auto \
-      --tpm2-pcrs=0+2+7 \
+      --tpm2-pcrs=7 \
       --wipe-slot=tpm2 2>&1) || {
         echo "WARNING: systemd-cryptenroll TPM2 enrollment failed"
         echo "$ENROLL_TPM_OUT"
@@ -620,6 +622,50 @@ EON
 }
 EON
   fi
+fi
+
+# If TPM was used, set up a one-shot first-boot service to re-enroll TPM with PCR7
+# from the installed system's boot environment using the saved recovery key.
+if [ "${ENCRYPT:-0}" -eq 1 ] && [ $TPM_AVAILABLE -eq 1 ]; then
+  echo "⚙ Installing first-boot TPM re-enroll service..."
+  mkdir -p /mnt/etc/systemd/system /mnt/etc/easy /mnt/etc/systemd/system/multi-user.target.wants
+  cat > /mnt/etc/easy/easyos-tpm-reenroll.sh <<EOR
+#!/usr/bin/env bash
+set -euo pipefail
+DEV="/dev/disk/by-uuid/$LUKS_UUID"
+LOGTAG="easyos-tpm-reenroll"
+echo "[easyos] Re-enrolling TPM2 token for \"$DEV\" with PCR7..." | systemd-cat -t "$LOGTAG" -p info || true
+if [ -f /etc/easy/recovery.key ]; then
+  if systemd-cryptenroll "$DEV" --tpm2-device=auto --tpm2-pcrs=7 --unlock-key-file=/etc/easy/recovery.key --wipe-slot=tpm2; then
+    echo "[easyos] TPM re-enrollment succeeded" | systemd-cat -t "$LOGTAG" -p info || true
+    touch /etc/easy/tpm-reenroll.done || true
+  else
+    echo "[easyos] TPM re-enrollment failed; leaving recovery key enrollment intact" | systemd-cat -t "$LOGTAG" -p warning || true
+  fi
+else
+  echo "[easyos] /etc/easy/recovery.key not found; skipping TPM re-enroll" | systemd-cat -t "$LOGTAG" -p warning || true
+fi
+exit 0
+EOR
+  chmod 700 /mnt/etc/easy/easyos-tpm-reenroll.sh
+
+  cat > /mnt/etc/systemd/system/easyos-tpm-reenroll.service <<'EOSVC'
+[Unit]
+Description=EASYOS: Re-enroll LUKS TPM2 token on first boot
+After=local-fs.target
+ConditionPathExists=/etc/easy/recovery.key
+ConditionPathExists=!/etc/easy/tpm-reenroll.done
+
+[Service]
+Type=oneshot
+ExecStart=/etc/easy/easyos-tpm-reenroll.sh
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
+EOSVC
+
+  ln -sf ../easyos-tpm-reenroll.service /mnt/etc/systemd/system/multi-user.target.wants/easyos-tpm-reenroll.service
 fi
 
 # Detect which channel this ISO was built with
