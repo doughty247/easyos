@@ -672,16 +672,25 @@ cat > /mnt/etc/nixos/easyos/easy-credentials.nix <<EOCRED
 {
   users.groups.${ADMIN} = {};
 
+  # Set only initialHashedPassword to allow users to change it later via passwd,
+  # and explicitly null out other password fields to avoid option conflicts.
   users.users.${ADMIN} = {
     isNormalUser = lib.mkForce true;
     group = lib.mkForce "${ADMIN}";
-    # Keep both forms to cover first boot and persistent generations
     initialHashedPassword = lib.mkForce "${ADMIN_HASH}";
-    hashedPassword = lib.mkForce "${ADMIN_HASH}";
+    password = lib.mkForce null;
+    initialPassword = lib.mkForce null;
+    hashedPassword = lib.mkForce null;
+    hashedPasswordFile = lib.mkForce null;
   };
 
-  users.users.root.initialHashedPassword = lib.mkForce "${ROOT_HASH}";
-  users.users.root.hashedPassword = lib.mkForce "${ROOT_HASH}";
+  users.users.root = {
+    initialHashedPassword = lib.mkForce "${ROOT_HASH}";
+    password = lib.mkForce null;
+    initialPassword = lib.mkForce null;
+    hashedPassword = lib.mkForce null;
+    hashedPasswordFile = lib.mkForce null;
+  };
 }
 EOCRED
 
