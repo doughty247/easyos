@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EASY Setup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        .banner {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 16px;
+            margin-bottom: 24px;
+            border-radius: 4px;
+        }
+        .banner h3 {
+            color: #92400e;
+            font-size: 16px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+        .banner h3::before {
+            content: "ℹ️";
+            margin-right: 8px;
+            font-size: 20px;
+        }
+        .banner p {
+            color: #78350f;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .banner ul {
+            margin-top: 8px;
+            margin-left: 20px;
+            color: #78350f;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #1f2937;
+            margin-bottom: 8px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #6b7280;
+            margin-bottom: 32px;
+            font-size: 16px;
+        }
+        .info-section {
+            background: #f3f4f6;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+        .info-section h2 {
+            color: #374151;
+            font-size: 18px;
+            margin-bottom: 12px;
+        }
+        .info-section p {
+            color: #4b5563;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        .info-section code {
+            background: #e5e7eb;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: "Courier New", monospace;
+            font-size: 13px;
+        }
+        .action-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .btn {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            text-align: center;
+            transition: all 0.2s;
+            display: block;
+        }
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        .btn-secondary:hover {
+            background: #d1d5db;
+        }
+        .footer {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="banner">
+            <h3>Setup Network Notice</h3>
+            <p>This hotspot is isolated for initial setup only:</p>
+            <ul>
+                <li>No internet access from this Wi-Fi network</li>
+                <li>Captive portal accessible only at 10.42.0.1:8088</li>
+                <li>For security, hotspot is not exposed on WAN/LAN</li>
+            </ul>
+            <p style="margin-top: 8px;">To enable internet during setup, configure <code>"hotspotAllowWAN": true</code> in your config.</p>
+        </div>
+
+        <h1>Welcome to EASY</h1>
+        <p class="subtitle">Your NixOS-based appliance setup portal</p>
+
+        <div class="info-section">
+            <h2>Getting Started</h2>
+            <p>You're connected to the <strong>EASY-Setup</strong> hotspot. This is your configuration interface for the appliance.</p>
+            <p>The system is currently running in first-run mode. Use the options below to configure and manage your installation.</p>
+        </div>
+
+        <div class="info-section">
+            <h2>Network Information</h2>
+            <p><strong>Hotspot SSID:</strong> EASY-Setup</p>
+            <p><strong>Portal Address:</strong> http://10.42.0.1:8088</p>
+            <p><strong>Mode:</strong> Walled Garden (No WAN by default)</p>
+        </div>
+
+        <div class="action-buttons">
+            <a href="/config" class="btn btn-primary">Configure System</a>
+            <a href="/status" class="btn btn-secondary">View System Status</a>
+            <a href="/docs" class="btn btn-secondary">Documentation</a>
+        </div>
+
+        <div class="footer">
+            <p>EasyOS on NixOS 24.11 | <a href="https://github.com/doughty247/easyos" target="_blank">GitHub</a></p>
+            <p style="margin-top: 8px; font-size: 12px;">For help, type <code>easy-help</code> in the terminal</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Resolve workspace to the directory containing this script so it works from any CWD
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+cd "$SCRIPT_DIR"
+
 # EASYOS ISO Builder (Docker/Podman version)
 # For use on Bazzite or other non-NixOS systems
 
@@ -60,9 +64,9 @@ echo "Building easyos ISO with Docker..."
 echo "==================================="
 echo ""
 
-# Check if we're in the right directory
+# Check if we're in the right directory (where this script lives)
 if [ ! -f "flake.nix" ]; then
-  echo "ERROR: Run this script from the easyos repo root" >&2
+  echo "ERROR: flake.nix not found next to build script at: $SCRIPT_DIR" >&2
   exit 1
 fi
 
@@ -232,8 +236,16 @@ else
   echo ""
 
   # Ensure persistent volumes for faster rebuilds
-  $DOCKER_CMD volume create easyos-nix-store >/dev/null 2>&1 || true
-  $DOCKER_CMD volume create easyos-nix-cache >/dev/null 2>&1 || true
+  STORE_VOL="easyos-nix-store"
+  CACHE_VOL="easyos-nix-cache"
+  if [ "$FORCE_BUILD" = true ]; then
+    # Use a fresh store on forced rebuild to avoid stale/corrupt outputs
+    TS=$(date +%s)
+    STORE_VOL="easyos-nix-store-$TS"
+    CACHE_VOL="easyos-nix-cache-$TS"
+  fi
+  $DOCKER_CMD volume create "$STORE_VOL" >/dev/null 2>&1 || true
+  $DOCKER_CMD volume create "$CACHE_VOL" >/dev/null 2>&1 || true
 
   if [ "$EXPORT_ARTIFACTS" = true ] && [ -n "$ARTIFACTS_DIR_HOST" ]; then
     mkdir -p "$ARTIFACTS_DIR_HOST"
@@ -246,9 +258,9 @@ else
   DOCKER_RUN_ARGS=("--rm" "-i")
 
   $DOCKER_CMD run "${DOCKER_RUN_ARGS[@]}" \
-    -v "$(pwd):/workspace:Z" \
-    -v easyos-nix-store:/nix \
-    -v easyos-nix-cache:/root/.cache/nix \
+    -v "$SCRIPT_DIR:/workspace:Z" \
+    -v "$STORE_VOL":/nix \
+    -v "$CACHE_VOL":/root/.cache/nix \
     -w /workspace \
     -e SUPPRESS_XATTR_WARNINGS=${SUPPRESS_XATTR_WARNINGS} \
     -e EASYOS_EXPORT_ARTIFACTS=${EXPORT_ARTIFACTS} \
@@ -408,15 +420,57 @@ nix build .#nixosConfigurations.iso.config.system.build.isoImage --impure --prin
 # Find the ISO file - try multiple methods
 ISO_PATH=""
 
+echo "DEBUG: result symlink and target:"
+ls -la result 2>/dev/null || true
+echo -n "DEBUG: readlink -f result: "
+readlink -f result 2>/dev/null || true
+TARGET_DBG=$(readlink -f result 2>/dev/null | tr -d '\n' || true)
+if [ -n "$TARGET_DBG" ]; then
+  echo "DEBUG: target listing (top):"
+  ls -la "$TARGET_DBG" 2>/dev/null || true
+  echo "DEBUG: search for inner ISO under target:"
+  find "$TARGET_DBG" -maxdepth 2 -name "*.iso" -type f 2>/dev/null || true
+fi
+
+# If the result target doesn't exist (e.g., previously moved from store), force a rebuild
+if [ -n "$TARGET_DBG" ] && [ ! -e "$TARGET_DBG" ]; then
+  echo "WARNING: Build output target missing from store; removing stale DB entry and rebuilding..."
+  nix store delete "$TARGET_DBG" 2>/dev/null || nix-store --delete "$TARGET_DBG" 2>/dev/null || true
+  # Build without linking to force materialization and capture the out path
+  OUT_PATH=$(nix build .#nixosConfigurations.iso.config.system.build.isoImage --impure --print-build-logs --accept-flake-config --no-link --print-out-paths | tr -d '\n' || true)
+  echo "DEBUG: no-link out path: $OUT_PATH"
+  if [ -z "$OUT_PATH" ]; then
+    echo "ERROR: nix build returned no output path" >&2
+    exit 1
+  fi
+  if [ ! -e "$OUT_PATH" ]; then
+    echo "ERROR: real output path does not exist: $OUT_PATH" >&2
+    exit 1
+  fi
+  # Update result symlink to the new path
+  rm -f result 2>/dev/null || true
+  ln -s "$OUT_PATH" result
+  TARGET_DBG="$OUT_PATH"
+  ls -la "$TARGET_DBG" 2>/dev/null || true
+fi
+
+# Method 0: If 'result' itself is a symlink to an ISO store path (directory with .iso suffix)
+if [ -L "result" ]; then
+  TARGET=$(readlink -f result 2>/dev/null | tr -d '\n' || true)
+  if [ -n "$TARGET" ] && [[ "$TARGET" == *.iso ]]; then
+    ISO_PATH="$TARGET"
+  fi
+fi
+
 # Method 1: Check if result/iso/ exists and has ISO files
-if [ -d "result/iso" ]; then
+if [ -z "$ISO_PATH" ] && [ -d "result/iso" ]; then
   ISO_PATH=$(find result/iso -name "*.iso" -type f 2>/dev/null | head -1)
 fi
 
 # Method 2: If not found, check hydra-build-products
 if [ -z "$ISO_PATH" ] && [ -f "result/nix-support/hydra-build-products" ]; then
   # Extract path from hydra-build-products (format: "file iso /path/to/file.iso")
-  ISO_PATH=$(cat result/nix-support/hydra-build-products | cut -d' ' -f3)
+  ISO_PATH=$(cut -d' ' -f3 < result/nix-support/hydra-build-products)
   # Verify the file exists
   if [ ! -f "$ISO_PATH" ]; then
     ISO_PATH=""
@@ -426,6 +480,21 @@ fi
 # Method 3: Search the entire result tree
 if [ -z "$ISO_PATH" ]; then
   ISO_PATH=$(find result -name "*.iso" -type f 2>/dev/null | head -1)
+fi
+
+# Final sanity: ensure the path exists
+if [ -n "$ISO_PATH" ] && [ ! -e "$ISO_PATH" ]; then
+  # Sometimes the isoImage derivation produces a store dir with .iso suffix.
+  # If that path does not exist for some reason, fall back to searching under the dereferenced result.
+  if [ -L "result" ]; then
+    ALT_TARGET=$(readlink -f result 2>/dev/null | tr -d '\n' || true)
+    if [ -d "$ALT_TARGET" ]; then
+      CANDIDATE=$(find "$ALT_TARGET" -maxdepth 2 -name "*.iso" -type f 2>/dev/null | head -1)
+      if [ -n "$CANDIDATE" ]; then
+        ISO_PATH="$CANDIDATE"
+      fi
+    fi
+  fi
 fi
 
 if [ -z "$ISO_PATH" ]; then
@@ -443,11 +512,25 @@ echo "Preparing iso-output/ (removing previous ISO files)..."
 find /workspace/iso-output -maxdepth 1 -type f -name "*.iso" -print -exec rm -f {} + 2>/dev/null || true
 
 echo "Transferring ISO to workspace..."
-if mv -v "$ISO_PATH" /workspace/iso-output/ 2>/dev/null; then
-  echo "ISO moved to iso-output/"
+if [ -d "$ISO_PATH" ]; then
+  INNER_ISO=$(find "$ISO_PATH" -maxdepth 2 -name "*.iso" -type f 2>/dev/null | head -1)
+  if [ -n "$INNER_ISO" ]; then
+    cp -v "$INNER_ISO" /workspace/iso-output/
+    echo "ISO copied to iso-output/ from store directory"
+  else
+    echo "ERROR: ISO directory found but no .iso file inside: $ISO_PATH" >&2
+    exit 1
+  fi
+elif [ -f "$ISO_PATH" ]; then
+  if mv -v "$ISO_PATH" /workspace/iso-output/ 2>/dev/null; then
+    echo "ISO moved to iso-output/"
+  else
+    cp -v "$ISO_PATH" /workspace/iso-output/
+    echo "ISO copied to iso-output/ (source in nix store retained)"
+  fi
 else
-  cp -v "$ISO_PATH" /workspace/iso-output/
-  echo "ISO copied to iso-output/ (source in nix store retained)"
+  echo "ERROR: ISO path is neither file nor directory: $ISO_PATH" >&2
+  exit 1
 fi
 
 NEW_HASH=$(calc_source_hash || echo "unknown")

@@ -186,12 +186,22 @@ DOCUMENTATION
     GitHub: https://github.com/doughty247/easyos
 
 POST-INSTALL FEATURES
-  • Open Wi‑Fi hotspot (no WPA) with captive portal on 8088 (single client)
+  • Open Wi‑Fi hotspot (no WPA) with captive portal
+    - SSID: EASY-Setup (always visible, no hidden SSID)
+    - Captive portal: http://10.42.0.1:8088 (single client)
+    - Walled garden: No WAN access by default (set hotspotAllowWAN: true to enable)
+    - Client isolation: Prevents hotspot clients from seeing each other
+    - mDNS blocked: Reduces device discovery on hotspot subnet
+  • Web UI at http://<ip>:8088 for config and nixos-rebuild
   • Router-grade NAT, DHCP/DNS via NetworkManager
-    • CAKE QoS with network auto-profiling
-    • BBR congestion control
-    • Web UI at http://<ip>:8088
-    • Automatic Btrfs snapshots & backups
+  • CAKE QoS with network auto-profiling + BBR congestion control
+  • Automatic Btrfs snapshots & backups
+
+SECURITY NOTES
+  • Hotspot captive portal bound to 10.42.0.1 only (not exposed on WAN/LAN)
+  • Firewall permits DNS/DHCP/HTTP only from hotspot subnet (10.42.0.0/24)
+  • TPM2-backed LUKS encryption with PCR7 + first-boot re-enrollment
+  • Recovery key QR code display during install for safe backup
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Type 'easy-help' anytime to see this message

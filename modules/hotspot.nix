@@ -24,6 +24,8 @@ let
   
   # WiFi performance tuning
   wifiPowerSave = if (netCfg ? wifiPowerSave) then netCfg.wifiPowerSave else false;  # Disabled by default for speed
+  # Walled garden: disable WAN access from hotspot clients unless enabled
+  allowHotspotWAN = if (netCfg ? hotspotAllowWAN) then netCfg.hotspotAllowWAN else false;
 
   hotspotEnabled = (mode == "first-run") || (mode == "guest");
   captivePort = 8088;
@@ -107,6 +109,7 @@ in {
           802-11-wireless.mode ap \
           802-11-wireless.band bg \
           802-11-wireless.channel ${wifiChannel} \
+          802-11-wireless.hidden no \
           ${lib.optionalString clientIsolation "802-11-wireless.ap-isolation yes"} \
           ipv4.method shared \
           ipv4.addresses ${hotspotIP}/24 \
@@ -121,21 +124,22 @@ in {
         
         echo "Hotspot 'easyos-hotspot' activated successfully on $WIFI_IFACE"
         
-        # Set up NAT/masquerading for hotspot clients to reach internet via WAN interface
-        # Find the default route interface (WAN)
-        WAN_IFACE=$(${pkgs.iproute2}/bin/ip route | ${pkgs.gnugrep}/bin/grep '^default' | ${pkgs.gawk}/bin/awk '{print $5}' | ${pkgs.coreutils}/bin/head -1 || true)
-        
-        if [ -n "$WAN_IFACE" ] && [ "$WAN_IFACE" != "$WIFI_IFACE" ]; then
-          echo "Setting up NAT: $WIFI_IFACE (hotspot) -> $WAN_IFACE (WAN)"
-          
-          # NAT rule: masquerade traffic from hotspot subnet going to WAN
-          ${pkgs.iptables}/bin/iptables -t nat -A POSTROUTING -s ${hotspotSubnet} -o "$WAN_IFACE" -j MASQUERADE
-          
-          # Allow forwarding from hotspot to WAN
-          ${pkgs.iptables}/bin/iptables -A FORWARD -i "$WIFI_IFACE" -o "$WAN_IFACE" -j ACCEPT
-          ${pkgs.iptables}/bin/iptables -A FORWARD -i "$WAN_IFACE" -o "$WIFI_IFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT
+        # Set up NAT/masquerading for hotspot clients only if allowed
+        if [ "${toString allowHotspotWAN}" = "true" ]; then
+          # Find the default route interface (WAN)
+          WAN_IFACE=$(${pkgs.iproute2}/bin/ip route | ${pkgs.gnugrep}/bin/grep '^default' | ${pkgs.gawk}/bin/awk '{print $5}' | ${pkgs.coreutils}/bin/head -1 || true)
+          if [ -n "$WAN_IFACE" ] && [ "$WAN_IFACE" != "$WIFI_IFACE" ]; then
+            echo "Setting up NAT: $WIFI_IFACE (hotspot) -> $WAN_IFACE (WAN)"
+            # NAT rule: masquerade traffic from hotspot subnet going to WAN
+            ${pkgs.iptables}/bin/iptables -t nat -A POSTROUTING -s ${hotspotSubnet} -o "$WAN_IFACE" -j MASQUERADE
+            # Allow forwarding from hotspot to WAN
+            ${pkgs.iptables}/bin/iptables -A FORWARD -i "$WIFI_IFACE" -o "$WAN_IFACE" -j ACCEPT
+            ${pkgs.iptables}/bin/iptables -A FORWARD -i "$WAN_IFACE" -o "$WIFI_IFACE" -m state --state RELATED,ESTABLISHED -j ACCEPT
+          else
+            echo "No WAN interface found or WAN is same as WiFi - NAT not configured"
+          fi
         else
-          echo "No WAN interface found or WAN is same as WiFi - NAT not configured"
+          echo "WAN access for hotspot clients is disabled by policy"
         fi
         
         # Limit captive portal to a single concurrent connection from hotspot subnet
@@ -184,8 +188,8 @@ in {
       
       virtualHosts."_" = {
         default = true;
+        # Bind ONLY to hotspot interface to avoid exposing captive portal on WAN/LAN
         listen = [ 
-          { addr = "0.0.0.0"; port = 80; }
           { addr = "10.42.0.1"; port = 80; }
         ];
         
@@ -212,17 +216,35 @@ in {
     };
 
     # Firewall configuration for hotspot
-    networking.firewall = {
-      # Allow DNS, DHCP, HTTP for captive portal
-      allowedUDPPorts = lib.mkAfter [ 53 67 ];
-      allowedTCPPorts = lib.mkAfter [ 53 80 captivePort ];
-      
-      # Allow forwarding between hotspot and WAN
+  networking.firewall = {
+      # Do not open ports globally. Restrict to hotspot subnet only.
+      allowedUDPPorts = lib.mkForce [ ];
+      allowedTCPPorts = lib.mkForce [ ];
+
       extraCommands = ''
-        # These rules are set up dynamically by the hotspot service
-        # but we need to ensure forwarding policy allows them
+        # Allow DNS from hotspot clients to this host
+        iptables -A INPUT -s ${hotspotSubnet} -p udp --dport 53 -j ACCEPT
+        iptables -A INPUT -s ${hotspotSubnet} -p tcp --dport 53 -j ACCEPT
+        # Allow DHCP requests from hotspot clients
+        iptables -A INPUT -s ${hotspotSubnet} -p udp --dport 67 -j ACCEPT
+        # Allow captive portal HTTP from hotspot clients only
+        iptables -A INPUT -s ${hotspotSubnet} -p tcp --dport 80 -j ACCEPT
+        iptables -A INPUT -s ${hotspotSubnet} -p tcp --dport ${toString captivePort} -j ACCEPT
+        # Block mDNS from hotspot clients to avoid device discovery
+        iptables -A INPUT -s ${hotspotSubnet} -p udp --dport 5353 -j DROP
+
+        # Ensure forwarding policy and established allow
         iptables -P FORWARD DROP
         iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+      '';
+      extraStopCommands = ''
+        iptables -D INPUT -s ${hotspotSubnet} -p udp --dport 53 -j ACCEPT 2>/dev/null || true
+        iptables -D INPUT -s ${hotspotSubnet} -p tcp --dport 53 -j ACCEPT 2>/dev/null || true
+        iptables -D INPUT -s ${hotspotSubnet} -p udp --dport 67 -j ACCEPT 2>/dev/null || true
+        iptables -D INPUT -s ${hotspotSubnet} -p tcp --dport 80 -j ACCEPT 2>/dev/null || true
+        iptables -D INPUT -s ${hotspotSubnet} -p tcp --dport ${toString captivePort} -j ACCEPT 2>/dev/null || true
+        iptables -D INPUT -s ${hotspotSubnet} -p udp --dport 5353 -j DROP 2>/dev/null || true
+        iptables -D FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || true
       '';
     };
     

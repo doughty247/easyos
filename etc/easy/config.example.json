@@ -21,6 +21,7 @@
     "hotspotDHCPStart": "10.42.0.10",
     "hotspotDHCPEnd": "10.42.0.250",
     "wifiChannel": "6",
+    "hotspotAllowWAN": false,
     "clientIsolation": true,
     "qosEnabled": true,
     "qosDownloadMbps": "100",
