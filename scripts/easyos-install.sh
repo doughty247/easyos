@@ -629,21 +629,23 @@ fi
 if [ "${ENCRYPT:-0}" -eq 1 ] && [ $TPM_AVAILABLE -eq 1 ]; then
   echo "⚙ Installing first-boot TPM re-enroll service..."
   mkdir -p /mnt/etc/systemd/system /mnt/etc/easy /mnt/etc/systemd/system/multi-user.target.wants
+  # Note: heredoc is unquoted to allow $LUKS_UUID expansion for DEV path,
+  # but all variables intended for the generated script must be escaped (e.g. \$DEV)
   cat > /mnt/etc/easy/easyos-tpm-reenroll.sh <<EOR
 #!/usr/bin/env bash
 set -euo pipefail
 DEV="/dev/disk/by-uuid/$LUKS_UUID"
 LOGTAG="easyos-tpm-reenroll"
-echo "[easyos] Re-enrolling TPM2 token for \"$DEV\" with PCR7..." | systemd-cat -t "$LOGTAG" -p info || true
+echo "[easyos] Re-enrolling TPM2 token for \"\$DEV\" with PCR7..." | systemd-cat -t "\$LOGTAG" -p info || true
 if [ -f /etc/easy/recovery.key ]; then
-  if systemd-cryptenroll "$DEV" --tpm2-device=auto --tpm2-pcrs=7 --unlock-key-file=/etc/easy/recovery.key --wipe-slot=tpm2; then
-    echo "[easyos] TPM re-enrollment succeeded" | systemd-cat -t "$LOGTAG" -p info || true
+  if systemd-cryptenroll "\$DEV" --tpm2-device=auto --tpm2-pcrs=7 --unlock-key-file=/etc/easy/recovery.key --wipe-slot=tpm2; then
+    echo "[easyos] TPM re-enrollment succeeded" | systemd-cat -t "\$LOGTAG" -p info || true
     touch /etc/easy/tpm-reenroll.done || true
   else
-    echo "[easyos] TPM re-enrollment failed; leaving recovery key enrollment intact" | systemd-cat -t "$LOGTAG" -p warning || true
+    echo "[easyos] TPM re-enrollment failed; leaving recovery key enrollment intact" | systemd-cat -t "\$LOGTAG" -p warning || true
   fi
 else
-  echo "[easyos] /etc/easy/recovery.key not found; skipping TPM re-enroll" | systemd-cat -t "$LOGTAG" -p warning || true
+  echo "[easyos] /etc/easy/recovery.key not found; skipping TPM re-enroll" | systemd-cat -t "\$LOGTAG" -p warning || true
 fi
 exit 0
 EOR

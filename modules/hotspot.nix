@@ -36,7 +36,17 @@ in {
     description = "Enable hotspot/guest mode automation (driven by JSON 'mode').";
   };
 
-  config = lib.mkIf (config.easyos.hotspot.enable && hotspotEnabled) {
+  config = lib.mkMerge [
+    # Always open webui port regardless of hotspot state - use mkDefault so it can be extended
+    { 
+      networking.firewall = {
+        enable = true;
+        allowedTCPPorts = [ 8088 ];
+      };
+    }
+    
+    # Conditional hotspot configuration
+    (lib.mkIf (config.easyos.hotspot.enable && hotspotEnabled) {
     assertions = [
       { assertion = ssid != null; message = "hotspot: SSID must be set."; }
     ];
@@ -216,12 +226,18 @@ in {
     };
 
     # Firewall configuration for hotspot
+    # Note: Port 8088 (webui) is opened unconditionally at the top of this file
   networking.firewall = {
-      # Do not open ports globally. Restrict to hotspot subnet only.
-      allowedUDPPorts = lib.mkForce [ ];
-      allowedTCPPorts = lib.mkForce [ ];
+      # Restrict other ports to hotspot subnet only via iptables rules below
+      allowedUDPPorts = [ ];
+      # Explicitly include webui port to ensure it's always open
+      allowedTCPPorts = [ 8088 ];
 
       extraCommands = ''
+        # Allow webui port from ANY source (not just hotspot subnet)
+        # This ensures VM testing and external access work
+        iptables -A INPUT -p tcp --dport ${toString captivePort} -j ACCEPT
+        
         # Allow DNS from hotspot clients to this host
         iptables -A INPUT -s ${hotspotSubnet} -p udp --dport 53 -j ACCEPT
         iptables -A INPUT -s ${hotspotSubnet} -p tcp --dport 53 -j ACCEPT
@@ -229,7 +245,6 @@ in {
         iptables -A INPUT -s ${hotspotSubnet} -p udp --dport 67 -j ACCEPT
         # Allow captive portal HTTP from hotspot clients only
         iptables -A INPUT -s ${hotspotSubnet} -p tcp --dport 80 -j ACCEPT
-        iptables -A INPUT -s ${hotspotSubnet} -p tcp --dport ${toString captivePort} -j ACCEPT
         # Block mDNS from hotspot clients to avoid device discovery
         iptables -A INPUT -s ${hotspotSubnet} -p udp --dport 5353 -j DROP
 
@@ -254,6 +269,5 @@ in {
       iproute2
       iw  # For WiFi power management control
     ];
-  };
+  }) ];
 }
-

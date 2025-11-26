@@ -81,6 +81,9 @@
         specialArgs = { inherit inputs; };
         modules = [
           (nixpkgs + "/nixos/modules/installer/cd-dvd/installation-cd-minimal.nix")
+          # Include webui and hotspot modules in ISO for live testing/configuration
+          ./modules/webui.nix
+          ./modules/hotspot.nix
           {
             # Set state version for the ISO
             system.stateVersion = "24.11";
@@ -95,6 +98,13 @@
 
             # Ship channel marker
             environment.etc."easy/channel".text = chanConfig.channelName;
+            
+            # Provide a default config for the webui in the ISO
+            environment.etc."easy/config.json".text = builtins.toJSON {
+              hostName = "easyos";
+              timeZone = "UTC";
+              mode = "first-run";
+            };
 
             # Enable NetworkManager and disable wpa_supplicant
             networking.networkmanager.enable = true;
@@ -114,16 +124,12 @@
             # Autologin to nixos user
             services.getty.autologinUser = lib.mkForce "nixos";
 
-            # Passwordless sudo for nixos user
+            # Passwordless sudo for nixos user - the installer profile already sets up nixos user
+            # Just ensure the groups are correct and sudo works
             security.sudo.wheelNeedsPassword = lib.mkForce false;
             users.users.nixos = {
-              isNormalUser = true;
-              extraGroups = [ "wheel" "networkmanager" ];
-              initialPassword = "";
-              initialHashedPassword = lib.mkForce null;
-              hashedPassword = lib.mkForce null;
-              hashedPasswordFile = lib.mkForce null;
-              password = lib.mkForce null;
+              # isNormalUser and empty password are already set by installation-device.nix
+              extraGroups = lib.mkForce [ "wheel" "networkmanager" "video" ];
             };
             security.sudo.extraRules = [
               {
@@ -271,5 +277,101 @@ EOF
         iso-beta = mkISO { channel = "beta"; };
         iso-preview = mkISO { channel = "preview"; };
       };
+
+      # Development shell for EasyOS development
+      devShells = forAllSystems (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+        in {
+          default = pkgs.mkShell {
+            name = "easyos-dev";
+            
+            buildInputs = with pkgs; [
+              # Nix tools
+              nix
+              nixos-rebuild
+              
+              # Build & test
+              qemu_kvm
+              OVMF
+              
+              # Utilities
+              jq
+              shellcheck
+              git
+              curl
+              
+              # For installer script testing
+              cryptsetup
+              parted
+              dosfstools
+            ];
+            
+            shellHook = ''
+              echo ""
+              echo "╔══════════════════════════════════════════════════════════╗"
+              echo "║            EasyOS Development Environment                ║"
+              echo "╠══════════════════════════════════════════════════════════╣"
+              echo "║  Commands:                                               ║"
+              echo "║    build-iso      - Build the ISO                        ║"
+              echo "║    test-vm        - Launch VM with current ISO           ║"
+              echo "║    check-flake    - Validate flake syntax                ║"
+              echo "║    lint-scripts   - Run shellcheck on scripts            ║"
+              echo "╚══════════════════════════════════════════════════════════╝"
+              echo ""
+              
+              export OVMF_CODE="${pkgs.OVMF.fd}/FV/OVMF_CODE.fd"
+              export OVMF_VARS="${pkgs.OVMF.fd}/FV/OVMF_VARS.fd"
+              
+              build-iso() {
+                echo "Building EasyOS ISO..."
+                nix build .#nixosConfigurations.iso.config.system.build.isoImage -o iso-result
+                ISO=$(find iso-result -name "*.iso" | head -1)
+                if [ -n "$ISO" ]; then
+                  mkdir -p iso-output
+                  cp -L "$ISO" iso-output/
+                  echo "ISO ready: iso-output/$(basename "$ISO")"
+                fi
+              }
+              
+              test-vm() {
+                ISO=$(find iso-output -name "*.iso" 2>/dev/null | head -1)
+                if [ -z "$ISO" ]; then
+                  echo "No ISO found. Run build-iso first."
+                  return 1
+                fi
+                
+                VM_DISK="/tmp/easyos-test.img"
+                [ ! -f "$VM_DISK" ] && qemu-img create -f qcow2 "$VM_DISK" 20G
+                
+                echo "Starting VM with $ISO"
+                echo "WebUI will be at http://localhost:8088/"
+                
+                qemu-system-x86_64 \
+                  -machine type=q35,accel=kvm \
+                  -cpu host -smp 2 -m 8G \
+                  -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+                  -drive if=pflash,format=raw,file=/tmp/OVMF_VARS.fd \
+                  -drive file="$VM_DISK",format=qcow2,if=virtio \
+                  -cdrom "$ISO" \
+                  -boot d \
+                  -net nic,model=virtio \
+                  -net user,hostfwd=tcp::8088-:8088
+              }
+              
+              check-flake() {
+                nix flake check --no-build
+              }
+              
+              lint-scripts() {
+                shellcheck scripts/*.sh 2>/dev/null || echo "No scripts to lint or shellcheck found issues"
+              }
+              
+              # Copy OVMF vars for VM use
+              [ ! -f /tmp/OVMF_VARS.fd ] && cp "$OVMF_VARS" /tmp/OVMF_VARS.fd 2>/dev/null || true
+            '';
+          };
+        }
+      );
     };
 }

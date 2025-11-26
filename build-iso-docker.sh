@@ -13,6 +13,7 @@ VENTOY_COPY=false
 VM_TEST=false
 VM_UPDATE=false
 FORCE_BUILD=false
+PRUNE_VOLUMES=false
 SUPPRESS_XATTR_WARNINGS=true  # Default to suppressing xattr warnings (they're harmless but slow)
 EXPORT_ARTIFACTS=true
 ARTIFACTS_DIR="iso-output/_artifacts"
@@ -32,6 +33,9 @@ for arg in "$@"; do
     --force|--rebuild)
       FORCE_BUILD=true
       ;;
+    --prune-volumes)
+      PRUNE_VOLUMES=true
+      ;;
     --no-xattr-warnings|--quiet-xattr)
       SUPPRESS_XATTR_WARNINGS=true
       ;;
@@ -46,11 +50,12 @@ for arg in "$@"; do
       NON_INTERACTIVE=true
       ;;
     *)
-      echo "Usage: $0 [--ventoy] [--vm] [--update-vm] [--force] [--no-xattr-warnings] [--non-interactive]"
+      echo "Usage: $0 [--ventoy] [--vm] [--update-vm] [--force] [--prune-volumes] [--no-xattr-warnings] [--non-interactive]"
       echo "  --ventoy  Auto-copy ISO to Ventoy USB drive"
       echo "  --vm      Launch ISO in QEMU VM for testing (fresh install)"
       echo "  --update-vm  Boot existing VM disk and auto-update with latest flake"
       echo "  --force   Force a rebuild even if the ISO appears up-to-date"
+      echo "  --prune-volumes  Remove stale easyos-nix-* volumes to reclaim space"
       echo "  --no-xattr-warnings  Hide harmless lgetxattr/read_attrs warnings from build logs"
       echo "  --no-artifacts       Skip exporting helper artifacts for inspection"
       echo "  --artifacts-dir=DIR  Export artifacts into DIR (relative to repo root)"
@@ -82,6 +87,23 @@ fi
 
 echo "Using: $DOCKER_CMD"
 echo ""
+
+# Prune stale easyos-nix-* volumes if requested or on --force
+if [ "$PRUNE_VOLUMES" = true ] || [ "$FORCE_BUILD" = true ]; then
+  echo "Cleaning up stale easyos-nix-* Docker volumes..."
+  STALE_VOLS=$($DOCKER_CMD volume ls -q 2>/dev/null | grep -E '^easyos-nix-(store|cache)' || true)
+  if [ -n "$STALE_VOLS" ]; then
+    echo "Removing volumes:"
+    echo "$STALE_VOLS" | while read -r vol; do
+      echo "  - $vol"
+      $DOCKER_CMD volume rm "$vol" 2>/dev/null || true
+    done
+    echo "✓ Volumes cleaned up"
+  else
+    echo "  No stale volumes found"
+  fi
+  echo ""
+fi
 
 # Preflight: ensure critical sources are tracked by git so Nix flakes include them
 if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -337,10 +359,27 @@ if [ "$ONLINE" -eq 1 ]; then
   echo "Online. Checking if updates are available..."
   cd /workspace
   if [ -f flake.lock ]; then
-    LOCAL_TIME=$(stat -c %Y flake.lock 2>/dev/null || stat -f %m flake.lock 2>/dev/null)
+    # Determine flake.lock "age" robustly. Prefer git commit time to avoid stale or skewed mtimes.
+    get_flakelock_epoch() {
+      if git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+         && git ls-files --error-unmatch flake.lock >/dev/null 2>&1; then
+        git log -1 --format=%ct -- flake.lock 2>/dev/null | tr -d '\n'
+        return
+      fi
+      stat -c %Y flake.lock 2>/dev/null || stat -f %m flake.lock 2>/dev/null || echo ""
+    }
+
+    LOCAL_TIME=$(get_flakelock_epoch)
     CURRENT_TIME=$(date +%s)
-    AGE_SECONDS=$((CURRENT_TIME - LOCAL_TIME))
-    AGE_DAYS=$((AGE_SECONDS / 86400))
+    AGE_SECONDS=0
+    AGE_DAYS=0
+    if [[ "$LOCAL_TIME" =~ ^[0-9]+$ ]]; then
+      AGE_SECONDS=$((CURRENT_TIME - LOCAL_TIME))
+      if [ "$AGE_SECONDS" -lt 0 ]; then AGE_SECONDS=0; fi
+      AGE_DAYS=$((AGE_SECONDS / 86400))
+    else
+      echo "WARNING: Could not determine flake.lock age reliably; proceeding without age check."
+    fi
 
     if git diff --quiet flake.nix flake.lock 2>/dev/null; then
       HAS_LOCAL_CHANGES=0
@@ -362,7 +401,11 @@ if [ "$ONLINE" -eq 1 ]; then
         AGE_MONTHS=$((AGE_DAYS / 30))
         AGE_MSG="$AGE_MONTHS months old"
       fi
-      echo "Local flake.lock is $AGE_MSG."
+      LAST_DATE="unknown"
+      if [[ "$LOCAL_TIME" =~ ^[0-9]+$ ]]; then
+        LAST_DATE=$(date -u -d @${LOCAL_TIME} +%Y-%m-%d 2>/dev/null || echo "unknown")
+      fi
+      echo "Local flake.lock is $AGE_MSG (last change: $LAST_DATE)."
       if [ "${EASYOS_NONINTERACTIVE:-}" = "true" ] || [ ! -t 0 ]; then
         echo "Non-interactive build: skipping flake update."
       else
@@ -413,6 +456,40 @@ if [ "$OPEN_EON" -ne "$CLOSE_EON" ] || [ "$OPEN_EOCRED" -ne "$CLOSE_EOCRED" ]; t
   exit 1
 fi
 echo "Preflight passed: installer heredocs OK."
+
+# Extra preflight: validate installer script syntax and catch common heredoc expansion pitfalls
+if [ -f /workspace/scripts/easyos-install.sh ]; then
+  echo "Preflight: bash -n syntax check for installer..."
+  if ! bash -n /workspace/scripts/easyos-install.sh 2>/tmp/easyos-bash-n.err; then
+    echo "ERROR: bash syntax check failed for scripts/easyos-install.sh" >&2
+    sed -n '1,120p' /tmp/easyos-bash-n.err >&2 || true
+    exit 1
+  fi
+  echo "Preflight: scanning for unescaped variables inside TPM re-enroll heredoc..."
+  START_LINE=$(grep -n 'easyos-tpm-reenroll.sh <<' /workspace/scripts/easyos-install.sh | tail -1 | cut -d: -f1 || true)
+  if [ -n "$START_LINE" ]; then
+    # Extract until closing EOR
+    sed -n "$((START_LINE+1)),/^[[:space:]]*EOR$/p" /workspace/scripts/easyos-install.sh > /tmp/easyos-reenroll-block.txt 2>/dev/null || true
+    if [ -s /tmp/easyos-reenroll-block.txt ]; then
+      # If "$DEV" or "$LOGTAG" appear unescaped, it's a bug (would expand at build time under set -u)
+      if grep -q '"$DEV"\| -t "$LOGTAG"' /tmp/easyos-reenroll-block.txt; then
+        echo "ERROR: Detected unescaped \$ variables in reenroll heredoc (would expand during build)." >&2
+        echo "Offending lines:" >&2
+        grep -n '"$DEV"\| -t "$LOGTAG"' /tmp/easyos-reenroll-block.txt >&2 || true
+        echo "Fix by escaping as \"\\$DEV\" and \"\\$LOGTAG\" or using a quoted heredoc." >&2
+        exit 1
+      fi
+    fi
+  fi
+  # Advisory: run shellcheck if available, but don't fail the build on warnings
+  if command -v shellcheck >/dev/null 2>&1; then
+    echo "Preflight (advisory): shellcheck scripts/easyos-install.sh"
+    shellcheck -x -s bash /workspace/scripts/easyos-install.sh || true
+  else
+    # Skip shellcheck if not available - it's advisory only and nix shell isn't reliable in all containers
+    echo "Preflight (advisory): shellcheck not available, skipping"
+  fi
+fi
 
 cd /workspace
 nix build .#nixosConfigurations.iso.config.system.build.isoImage --impure --print-build-logs --accept-flake-config
@@ -750,14 +827,25 @@ if [ "$VM_TEST" = true ]; then
   echo "================================================================"
   echo ""
   
-  # Force remove existing disk for fresh install
+  # Reuse existing disk if ISO hasn't changed and disk exists with reasonable size
+  # A disk < 500MB is probably not installed yet (fresh qcow2 is ~200KB)
+  REUSE_DISK=false
   if [ -f "$VM_DISK" ]; then
-    echo "Removing existing VM disk: $VM_DISK"
-    rm -f "$VM_DISK"
+    DISK_SIZE=$(stat -c %s "$VM_DISK" 2>/dev/null || echo 0)
+    DISK_SIZE_MB=$((DISK_SIZE / 1024 / 1024))
+    if [ "$DISK_SIZE_MB" -gt 500 ] && [ "$BUILD_PERFORMED" = false ]; then
+      echo "Reusing existing VM disk ($DISK_SIZE_MB MB) - ISO unchanged"
+      REUSE_DISK=true
+    else
+      echo "Removing existing VM disk (ISO was rebuilt or disk is fresh)"
+      rm -f "$VM_DISK"
+    fi
   fi
   
-  echo "Creating test disk: $VM_DISK"
-  qemu-img create -f qcow2 "$VM_DISK" 20G
+  if [ "$REUSE_DISK" = false ]; then
+    echo "Creating test disk: $VM_DISK"
+    qemu-img create -f qcow2 "$VM_DISK" 20G
+  fi
   
   echo ""
   echo "Starting VM with:"
@@ -788,9 +876,25 @@ if [ "$VM_TEST" = true ]; then
     [ -f "$p" ] && OVMF_VARS="$p" && break
   done
 
+  # Boot order: if reusing disk (installed system), boot from disk; otherwise boot from ISO
+  BOOT_ORDER="d"  # d = CD-ROM first (for fresh install)
+  CDROM_ARGS="-cdrom $ISO"
+  if [ "$REUSE_DISK" = true ]; then
+    BOOT_ORDER="c"  # c = hard disk first (for installed system)
+    CDROM_ARGS=""   # Don't attach ISO for installed system boot
+    echo "Booting from installed disk (no ISO attached)"
+  else
+    echo "Booting from ISO for fresh install"
+  fi
+
   if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
     OVMF_VARS_RW="/tmp/OVMF_VARS.easyos.fd"
-    cp "$OVMF_VARS" "$OVMF_VARS_RW" 2>/dev/null || true
+    # Reuse OVMF vars if disk is being reused (preserves boot entries)
+    if [ "$REUSE_DISK" = true ] && [ -f "$OVMF_VARS_RW" ]; then
+      echo "Reusing UEFI NVRAM state"
+    else
+      cp "$OVMF_VARS" "$OVMF_VARS_RW" 2>/dev/null || true
+    fi
     echo "Using UEFI firmware: $OVMF_CODE"
     qemu-system-x86_64 \
       -machine type=q35,accel=kvm \
@@ -800,18 +904,22 @@ if [ "$VM_TEST" = true ]; then
       -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
       -drive if=pflash,format=raw,file="$OVMF_VARS_RW" \
       -drive file="$VM_DISK",format=qcow2,if=virtio \
-      -cdrom "$ISO" \
-      -boot d
+      $CDROM_ARGS \
+      -boot $BOOT_ORDER \
+      -net nic,model=virtio \
+      -net user,hostfwd=tcp::8088-:8088
   else
     echo "WARNING: Could not find OVMF (UEFI) firmware on host. Falling back to BIOS (GRUB required)."
     qemu-system-x86_64 \
-      -cdrom "$ISO" \
+      $CDROM_ARGS \
       -m "$VM_RAM" \
       -enable-kvm \
       -drive file="$VM_DISK",format=qcow2,if=virtio \
       -cpu host \
       -smp 2 \
-      -boot d
+      -boot "$BOOT_ORDER" \
+      -net nic,model=virtio \
+      -net user,hostfwd=tcp::8088-:8088
   fi
     
   echo ""
