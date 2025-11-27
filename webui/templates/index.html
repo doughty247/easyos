@@ -416,13 +416,14 @@
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
         }
         
-        .night-mode .bg-white {
-            background: rgba(30, 41, 59, 0.85) !important;
+        .night-mode .bg-white:not(.border-dashed) {
+            background: rgba(51, 65, 85, 0.95) !important;
+            border: 1px solid rgba(100, 116, 139, 0.5) !important;
         }
         
         .night-mode .border-gray-100,
         .night-mode .border-gray-200 {
-            border-color: rgba(71, 85, 105, 0.4) !important;
+            border-color: rgba(100, 116, 139, 0.5) !important;
         }
         
         .night-mode .bg-gray-50,
@@ -438,6 +439,16 @@
         
         .night-mode .sidebar-overlay {
             background: rgba(0, 0, 0, 0.6) !important;
+        }
+        
+        .night-mode .border-dashed {
+            border-color: rgba(148, 163, 184, 0.6) !important;
+            background: rgba(71, 85, 105, 0.5) !important;
+        }
+        
+        .night-mode .border-dashed:hover {
+            border-color: #86efac !important;
+            background: rgba(34, 197, 94, 0.1) !important;
         }
         
         .night-mode .mobile-bottom-nav {
