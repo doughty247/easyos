@@ -148,7 +148,7 @@ HOTSPOT & ACCESS POINT
   systemctl status easyos-hotspot     Check hotspot status
 
   Features: Open SSID for first‑run (no WPA), router‑grade NAT/masquerading,
-        DHCP/DNS via NetworkManager, captive portal on port 8088
+        DHCP/DNS via NetworkManager, captive portal on port 1234
         (limited to a single concurrent client), client isolation support
 
 NETWORK PERFORMANCE & QoS
@@ -175,7 +175,7 @@ ENCRYPTION (TPM2/LUKS)
           Recovery key was displayed as QR code during installation.
 
 WEB INTERFACE
-    URL: http://localhost:8088 (or http://<device-ip>:8088)
+    URL: http://localhost:1234 (or http://<device-ip>:1234)
     Use 'ip addr show' to find your device's IP address
 
 CONFIGURATION
@@ -310,6 +310,11 @@ EOF
 
     # Firewall defaults on; modules can open ports as needed
     networking.firewall.enable = true;
+    # Allow common application ports to ensure services are accessible
+    networking.firewall.allowedTCPPortRanges = [
+      { from = 8000; to = 9000; } # Web apps (HomeAssistant, Jellyfin, etc.)
+    ];
+    networking.firewall.allowedTCPPorts = [ 80 443 ];
 
     # system.stateVersion is set above with mkDefault; do not set twice
   };

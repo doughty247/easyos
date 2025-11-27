@@ -12,7 +12,7 @@ if [ -c "$TTY_DEV" ]; then
   exec 3<>"$TTY_DEV" || true
 else
   # Fallbacks if /dev/tty unavailable (very rare on live ISO)
-  exec 3>&1 || true
+  exec 3<&0 || true
 fi
 cleanup_fds() { exec 3>&- 3<&- 2>/dev/null || true; }
 trap cleanup_fds EXIT
@@ -823,7 +823,7 @@ fi
 echo "What happens on first boot:"
 echo "  • Auto-login as '$ADMIN'"
 echo "  • WiFi hotspot will start (if WiFi adapter present)"
-echo "  • Web UI available at http://<ip>:8088/"
+echo "  • Web UI available at http://<ip>:1234/"
 echo ""
 if [ -d /mnt/etc ]; then
   cp -f "$LOGFILE" /mnt/etc/easyos-install.log || true

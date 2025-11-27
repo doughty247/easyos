@@ -23,28 +23,39 @@ let
 
   serverPy = ''
     #!/usr/bin/env python3
-    import json, os, sys, time
+    import json, os, sys, time, glob
     from http.server import HTTPServer, SimpleHTTPRequestHandler
-    from urllib.parse import urlparse
+    from urllib.parse import urlparse, parse_qs
     import subprocess
 
     ROOT = '/etc/easy/webui'
+    MUTABLE_ROOT = '/var/lib/easyos/webui'
     CONFIG_PATH = '/etc/easy/config.json'
     LOG_PATH = '/var/log/easyos-apply.log'
+    STORE_PATH = '/etc/easy/store/apps'
 
     class Handler(SimpleHTTPRequestHandler):
         def _set_headers(self, code=200, ctype='application/json'):
             self.send_response(code)
             self.send_header('Content-Type', ctype)
             self.send_header('Cache-Control', 'no-store')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
 
         def do_GET(self):
-            p = urlparse(self.path).path
+            parsed = urlparse(self.path)
+            p = parsed.path
+            query = parse_qs(parsed.query)
+            
             if p == '/':
                 self._set_headers(200, 'text/html; charset=utf-8')
-                with open(os.path.join(ROOT, 'index.html'), 'rb') as f:
-                    self.wfile.write(f.read())
+                # Try mutable dev file first
+                if os.path.exists(os.path.join(MUTABLE_ROOT, 'index.html')):
+                    with open(os.path.join(MUTABLE_ROOT, 'index.html'), 'rb') as f:
+                        self.wfile.write(f.read())
+                else:
+                    with open(os.path.join(ROOT, 'index.html'), 'rb') as f:
+                        self.wfile.write(f.read())
             elif p == '/api/config':
                 try:
                     with open(CONFIG_PATH, 'r') as f:
@@ -65,6 +76,62 @@ let
                     pass
                 self._set_headers()
                 self.wfile.write(json.dumps({'active': status, 'log': log_tail}).encode())
+            elif p == '/api/store/apps':
+                # List all available apps from store
+                apps = []
+                try:
+                    for filepath in glob.glob(os.path.join(STORE_PATH, '*.json')):
+                        try:
+                            with open(filepath, 'r') as f:
+                                app = json.load(f)
+                                apps.append(app)
+                        except Exception as e:
+                            print(f"Error loading {filepath}: {e}")
+                except Exception as e:
+                    print(f"Error scanning store: {e}")
+                
+                # Filter by category if specified
+                category = query.get('category', [None])[0]
+                if category:
+                    apps = [a for a in apps if a.get('category') == category]
+                
+                # Search by query if specified
+                search = query.get('q', [None])[0]
+                if search:
+                    search = search.lower()
+                    apps = [a for a in apps if 
+                            search in a.get('name', "").lower() or 
+                            search in a.get('description', "").lower() or
+                            any(search in tag.lower() for tag in a.get('tags', []))]
+                
+                self._set_headers()
+                self.wfile.write(json.dumps(apps).encode())
+            elif p.startswith('/api/store/app/'):
+                # Get single app by ID
+                app_id = p.split('/')[-1]
+                app_path = os.path.join(STORE_PATH, f'{app_id}.json')
+                if os.path.exists(app_path):
+                    with open(app_path, 'r') as f:
+                        self._set_headers()
+                        self.wfile.write(f.read().encode())
+                else:
+                    self.send_error(404, f'App {app_id} not found')
+            elif p == '/api/store/categories':
+                # Get list of categories
+                categories = set()
+                try:
+                    for filepath in glob.glob(os.path.join(STORE_PATH, '*.json')):
+                        try:
+                            with open(filepath, 'r') as f:
+                                app = json.load(f)
+                                if 'category' in app:
+                                    categories.add(app['category'])
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                self._set_headers()
+                self.wfile.write(json.dumps(list(categories)).encode())
             else:
                 self.send_error(404)
 
@@ -72,6 +139,7 @@ let
             p = urlparse(self.path).path
             length = int(self.headers.get('Content-Length') or 0)
             body = self.rfile.read(length).decode() if length else ""
+            
             if p == '/api/config':
                 try:
                     data = json.loads(body or '{}')
@@ -92,18 +160,35 @@ let
                 subprocess.run(['systemctl','start','easyos-apply.service'])
                 self._set_headers(202)
                 self.wfile.write(json.dumps({'started': True}).encode())
+            elif p == '/api/dev/update_ui':
+                # Dev endpoint to update UI without rebuild
+                try:
+                    os.makedirs(MUTABLE_ROOT, exist_ok=True)
+                    with open(os.path.join(MUTABLE_ROOT, 'index.html'), 'w') as f:
+                        f.write(body)
+                    self._set_headers(200)
+                    self.wfile.write(json.dumps({'ok': True, 'source': 'mutable'}).encode())
+                except Exception as e:
+                    self._set_headers(500)
+                    self.wfile.write(json.dumps({'error': str(e)}).encode())
             else:
                 self.send_error(404)
 
     if __name__ == '__main__':
         os.chdir(ROOT)
-        port = 8088
+        port = 1234
         httpd = HTTPServer(('0.0.0.0', port), Handler)
         print(f'EasyOS web UI listening on http://0.0.0.0:{port}/', flush=True)
         httpd.serve_forever()
   '';
 
   indexHtml = builtins.readFile ../webui/templates/index.html;
+  
+  # Load store apps from the store directory
+  storeAppsDir = ../store/apps;
+  storeApps = if builtins.pathExists storeAppsDir then
+    builtins.attrNames (builtins.readDir storeAppsDir)
+  else [];
 in {
   options.easyos.webui.enable = lib.mkOption {
     type = lib.types.bool;
@@ -122,6 +207,12 @@ in {
     environment.etc."easy/webui/server.py".text = serverPy;
     environment.etc."easy/webui/index.html".text = indexHtml;
     environment.etc."easy/apply.sh" = { text = applyScript; mode = "0755"; };
+    
+    # Deploy store apps
+    environment.etc."easy/store/apps" = {
+      source = storeAppsDir;
+      mode = "0755";
+    };
 
     # Apply service (runs on demand)
     systemd.services.easyos-apply = {
@@ -145,6 +236,6 @@ in {
     };
 
     # Open the portal port
-    networking.firewall.allowedTCPPorts = lib.mkAfter [ 8088 ];
+    networking.firewall.allowedTCPPorts = lib.mkAfter [ 1234 ];
   };
 }

@@ -90,18 +90,38 @@ echo ""
 
 # Prune stale easyos-nix-* volumes if requested or on --force
 if [ "$PRUNE_VOLUMES" = true ] || [ "$FORCE_BUILD" = true ]; then
-  echo "Cleaning up stale easyos-nix-* Docker volumes..."
+  echo "Cleaning up for fresh build..."
+  
+  # Remove stale containers using easyos volumes
+  STALE_CONTAINERS=$($DOCKER_CMD ps -a --filter "ancestor=nixos/nix:latest" -q 2>/dev/null || true)
+  if [ -n "$STALE_CONTAINERS" ]; then
+    echo "Removing stale containers..."
+    echo "$STALE_CONTAINERS" | xargs -r $DOCKER_CMD rm -f 2>/dev/null || true
+  fi
+  
+  # Remove easyos Docker volumes
   STALE_VOLS=$($DOCKER_CMD volume ls -q 2>/dev/null | grep -E '^easyos-nix-(store|cache)' || true)
   if [ -n "$STALE_VOLS" ]; then
-    echo "Removing volumes:"
+    echo "Removing Docker volumes:"
     echo "$STALE_VOLS" | while read -r vol; do
       echo "  - $vol"
       $DOCKER_CMD volume rm "$vol" 2>/dev/null || true
     done
-    echo "✓ Volumes cleaned up"
-  else
-    echo "  No stale volumes found"
   fi
+  
+  # Remove cached ISO and hash stamp
+  if [ -d "iso-output" ]; then
+    echo "Removing cached ISO and hash stamp..."
+    rm -f iso-output/.easyos-source-hash iso-output/*.iso 2>/dev/null || true
+  fi
+  
+  # Remove VM disk and UEFI state
+  if [ -f "/tmp/easyos-test.img" ]; then
+    echo "Removing VM disk..."
+    rm -f /tmp/easyos-test.img /tmp/OVMF_VARS.easyos*.fd 2>/dev/null || true
+  fi
+  
+  echo "✓ Cleanup complete"
   echo ""
 fi
 
@@ -907,7 +927,7 @@ if [ "$VM_TEST" = true ]; then
       $CDROM_ARGS \
       -boot $BOOT_ORDER \
       -net nic,model=virtio \
-      -net user,hostfwd=tcp::8088-:8088
+      -net user,hostfwd=tcp::1234-:1234
   else
     echo "WARNING: Could not find OVMF (UEFI) firmware on host. Falling back to BIOS (GRUB required)."
     qemu-system-x86_64 \
@@ -919,7 +939,7 @@ if [ "$VM_TEST" = true ]; then
       -smp 2 \
       -boot "$BOOT_ORDER" \
       -net nic,model=virtio \
-      -net user,hostfwd=tcp::8088-:8088
+      -net user,hostfwd=tcp::1234-:1234
   fi
     
   echo ""
@@ -950,7 +970,7 @@ if [ "$VM_UPDATE" = true ]; then
     echo "Options:"
     echo "  1. Close the existing VM window and run this command again"
     echo "  2. Or access the running VM directly:"
-    echo "     - Web UI: http://localhost:8088/ (if port forwarding is active)"
+    echo "     - Web UI: http://localhost:1234/ (if port forwarding is active)"
     echo "     - Console: Switch to the QEMU window"
     echo ""
     echo "To update the running VM:"
@@ -1000,10 +1020,10 @@ if [ "$VM_UPDATE" = true ]; then
     echo "Manual sync required:"
     echo "  1. SSH into the VM or use the console"
     echo "  2. Run: cd /etc/nixos/easyos && git pull"
-    echo "  3. Or use the web UI at http://localhost:8088/ to edit & apply"
+    echo "  3. Or use the web UI at http://localhost:1234/ to edit & apply"
     echo "==================================================================="
   else
-    echo "Web UI available at http://localhost:8088/"
+    echo "Web UI available at http://localhost:1234/"
     echo "Click 'Save & Apply' to rebuild with latest changes."
   fi
   echo ""
@@ -1041,7 +1061,7 @@ if [ "$VM_UPDATE" = true ]; then
       -drive if=pflash,format=raw,file="$OVMF_VARS_RW" \
       -drive file="$VM_DISK",format=qcow2,if=virtio \
       -net nic,model=virtio \
-      -net user,hostfwd=tcp::8088-:8088
+      -net user,hostfwd=tcp::1234-:1234
   else
     echo "WARNING: OVMF not found. Falling back to BIOS boot."
     qemu-system-x86_64 \
@@ -1051,7 +1071,7 @@ if [ "$VM_UPDATE" = true ]; then
       -cpu host \
       -smp 2 \
       -net nic,model=virtio \
-      -net user,hostfwd=tcp::8088-:8088
+      -net user,hostfwd=tcp::1234-:1234
   fi
   
   echo ""

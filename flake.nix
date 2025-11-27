@@ -196,11 +196,11 @@ DOCUMENTATION
 POST-INSTALL FEATURES
   • Open Wi‑Fi hotspot (no WPA) with captive portal
     - SSID: EASY-Setup (always visible, no hidden SSID)
-    - Captive portal: http://10.42.0.1:8088 (single client)
+    - Captive portal: http://10.42.0.1:1234 (single client)
     - Walled garden: No WAN access by default (set hotspotAllowWAN: true to enable)
     - Client isolation: Prevents hotspot clients from seeing each other
     - mDNS blocked: Reduces device discovery on hotspot subnet
-  • Web UI at http://<ip>:8088 for config and nixos-rebuild
+  • Web UI at http://<ip>:1234 for config and nixos-rebuild
   • Router-grade NAT, DHCP/DNS via NetworkManager
   • CAKE QoS with network auto-profiling + BBR congestion control
   • Automatic Btrfs snapshots & backups
@@ -347,7 +347,7 @@ EOF
                 [ ! -f "$VM_DISK" ] && qemu-img create -f qcow2 "$VM_DISK" 20G
                 
                 echo "Starting VM with $ISO"
-                echo "WebUI will be at http://localhost:8088/"
+                echo "WebUI will be at http://localhost:1234/"
                 
                 qemu-system-x86_64 \
                   -machine type=q35,accel=kvm \
@@ -358,7 +358,7 @@ EOF
                   -cdrom "$ISO" \
                   -boot d \
                   -net nic,model=virtio \
-                  -net user,hostfwd=tcp::8088-:8088
+                  -net user,hostfwd=tcp::1234-:1234
               }
               
               check-flake() {

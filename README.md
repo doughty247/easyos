@@ -8,8 +8,8 @@ NixOS-based declarative appliance OS. Configure everything via `/etc/easy/config
 - Network-first installer — Requires internet; prompts you to configure via `nmtui`
 - Built-in help — Type `easy-help` for quick commands and docs
 - Update channels — stable, beta, preview
-- Web UI — http://<device-ip>:8088
-- Hotspot mode — Open guest SSID for first-run (no WPA); captive portal on 8088; single concurrent session
+- Web UI — http://<device-ip>:1234
+- Hotspot mode — Open guest SSID for first-run (no WPA); captive portal on 1234; single concurrent session
 - Backups — Automated Btrfs snapshots and backups to USB/external drives
 - Storage expansion — Add drives and expand storage declaratively
 - Optional encryption — LUKS2 with TPM2 auto-unlock and printed recovery key
@@ -39,8 +39,8 @@ cd easyos/easyos
 The system will:
 - Auto-login as your admin user
 - Start an open Wi‑Fi hotspot (if Wi‑Fi is present and no Ethernet)
-- Expose a captive portal at http://10.42.0.1:8088/ (limited to one active client)
-- Make the web UI available at http://<device-ip>:8088/
+- Expose a captive portal at http://10.42.0.1:1234/ (limited to one active client)
+- Make the web UI available at http://<device-ip>:1234/
 
 Type `easy-help` anytime to see available commands and documentation.
 
@@ -101,7 +101,7 @@ cat /etc/easy/channel                  # Check update channel
 - OS base — NixOS 24.11 with flakes
 - Bootloader — systemd‑boot (UEFI) or GRUB (BIOS), auto‑selected by installer
 - Filesystem — Btrfs with compression and subvolumes
-- Network — NetworkManager for Wi‑Fi/Ethernet, captive portal on 8088 during setup
+- Network — NetworkManager for Wi‑Fi/Ethernet, captive portal on 1234 during setup
 - Credentials — SHA‑512 hashed passwords set during installation (admin/root)
 - Encryption — LUKS2 with TPM2 auto‑unlock (if selected) and recovery key
 

@@ -1,0 +1,10 @@
+{
+  "apps": {
+    "immich": {
+      "enable": false
+    },
+    "nextcloud": {
+      "enable": false
+    }
+  }
+}

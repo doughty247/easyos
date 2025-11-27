@@ -28,7 +28,7 @@ let
   allowHotspotWAN = if (netCfg ? hotspotAllowWAN) then netCfg.hotspotAllowWAN else false;
 
   hotspotEnabled = (mode == "first-run") || (mode == "guest");
-  captivePort = 8088;
+  captivePort = 1234;
 in {
   options.easyos.hotspot.enable = lib.mkOption {
     type = lib.types.bool;
@@ -41,7 +41,7 @@ in {
     { 
       networking.firewall = {
         enable = true;
-        allowedTCPPorts = [ 8088 ];
+        allowedTCPPorts = [ 1234 ];
       };
     }
     
@@ -226,12 +226,12 @@ in {
     };
 
     # Firewall configuration for hotspot
-    # Note: Port 8088 (webui) is opened unconditionally at the top of this file
+    # Note: Port 1234 (webui) is opened unconditionally at the top of this file
   networking.firewall = {
       # Restrict other ports to hotspot subnet only via iptables rules below
       allowedUDPPorts = [ ];
       # Explicitly include webui port to ensure it's always open
-      allowedTCPPorts = [ 8088 ];
+      allowedTCPPorts = [ 1234 ];
 
       extraCommands = ''
         # Allow webui port from ANY source (not just hotspot subnet)

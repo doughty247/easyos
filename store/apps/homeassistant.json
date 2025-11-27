@@ -1,0 +1,31 @@
+{
+  "id": "homeassistant",
+  "name": "Home Assistant",
+  "version": "1.0.0",
+  "description": "Open source home automation that puts local control and privacy first.",
+  "category": "automation",
+  "author": "Home Assistant",
+  "website": "https://home-assistant.io",
+  "icon": {
+    "type": "gradient",
+    "colors": ["#41BDF5", "#18BCF2"],
+    "svg": "<svg viewBox='0 0 24 24' fill='white' xmlns='http://www.w3.org/2000/svg'><path d='M22.939 10.627 13.061.749a1.505 1.505 0 0 0-2.121 0l-9.879 9.878C.478 11.21 0 12.363 0 13.187v9c0 .826.675 1.5 1.5 1.5h9.227l-4.063-4.062a2.034 2.034 0 0 1-.664.113c-1.13 0-2.05-.92-2.05-2.05s.92-2.05 2.05-2.05 2.05.92 2.05 2.05c0 .233-.041.456-.113.665l3.163 3.163V9.928a2.05 2.05 0 0 1-1.15-1.84c0-1.13.92-2.05 2.05-2.05s2.05.92 2.05 2.05a2.05 2.05 0 0 1-1.15 1.84v8.127l3.146-3.146A2.051 2.051 0 0 1 18 12.239c1.13 0 2.05.92 2.05 2.05s-.92 2.05-2.05 2.05c-.25 0-.488-.047-.709-.13L12.9 20.602v3.088h9.6c.825 0 1.5-.675 1.5-1.5v-9c0-.825-.477-1.977-1.061-2.561z'/></svg>"
+  },
+  "colors": {
+    "primary": "#18BCF2",
+    "gradient": "linear-gradient(135deg, #41BDF5 0%, #18BCF2 100%)"
+  },
+  "nixModule": {
+    "services.home-assistant": {
+      "enable": true,
+      "openFirewall": true,
+      "config": null
+    }
+  },
+  "ports": [8123],
+  "requirements": {
+    "minRAM": "2GB",
+    "storage": "2GB+"
+  },
+  "tags": ["automation", "smart-home", "iot", "zigbee", "zwave"]
+}
