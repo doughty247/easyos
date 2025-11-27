@@ -1397,8 +1397,8 @@
                 <div x-show="currentView === 'garden'" x-cloak class="slide-up">
                     <div class="app-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                         
-                        <!-- Dynamic App Tiles from Store - Material You Style -->
-                        <template x-for="app in storeApps" :key="app.id">
+                        <!-- Dynamic App Tiles - Only Installed Apps -->
+                        <template x-for="app in installedApps" :key="app.id">
                             <div class="app-tile rounded-3xl p-6 shadow-card border border-white/30 transition-all flex flex-col"
                                  :style="'background: linear-gradient(145deg, ' + (app.colors?.primary || '#22C55E') + ' 0%, ' + (app.colors?.secondary || app.colors?.primary || '#4ADE80') + ' 100%);'"
                                  :class="{
