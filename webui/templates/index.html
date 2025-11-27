@@ -1133,7 +1133,7 @@
            :class="{ 'open': sidebarOpen }">
         <!-- Same content as desktop sidebar -->
         <div class="flex items-center justify-center gap-3 mb-8 px-2">
-            <div class="w-12 h-12 relative cursor-watering-can bg-white rounded-2xl shadow-md p-1"
+            <div class="w-12 h-12 relative cursor-watering-can"
                  :class="{ 'plant-happy': isHappy, 'plant-sway': !isHappy }"
                  @touchstart="startWatering()"
                  @touchend="stopWatering()">
@@ -1187,8 +1187,8 @@
                 </svg>
             </div>
             <div>
-                <span class="text-xl font-extrabold text-ease-forest">ease</span>
-                <span class="text-xl font-extrabold text-ease-leaf">OS</span>
+                <span class="text-xl font-extrabold text-ease-forest drop-shadow-sm">ease</span>
+                <span class="text-xl font-extrabold text-ease-leaf drop-shadow-sm">OS</span>
             </div>
             <button @click="sidebarOpen = false" class="ml-auto p-2 rounded-xl hover:bg-gray-100 transition-colors">
                 <svg class="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1226,7 +1226,7 @@
             
             <!-- Logo -->
             <div class="flex items-center justify-center gap-3 mb-10 px-2">
-                <div class="w-14 h-14 relative cursor-watering-can bg-white rounded-2xl shadow-md p-1"
+                <div class="w-14 h-14 relative cursor-watering-can"
                      :class="{ 'plant-happy': isHappy, 'plant-sway': !isHappy }"
                      @mousedown="startWatering()"
                      @mouseup="stopWatering()"
@@ -1292,8 +1292,8 @@
                     </svg>
                 </div>
                 <div>
-                    <span class="text-2xl font-extrabold text-ease-forest">ease</span>
-                    <span class="text-2xl font-extrabold text-ease-leaf">OS</span>
+                    <span class="text-2xl font-extrabold text-ease-forest drop-shadow-sm">ease</span>
+                    <span class="text-2xl font-extrabold text-ease-leaf drop-shadow-sm">OS</span>
                 </div>
             </div>
             
