@@ -1980,41 +1980,16 @@
                     return this.defaultAppIcon;
                 },
                 
-                // Generate Material You style gradient from app ID
+                // Get gradient from app colors (defined in JSON)
                 getAppGradient(app) {
-                    if (!app?.id) return 'linear-gradient(135deg, #22C55E 0%, #4ADE80 100%)';
-                    
-                    // Hash the app ID to get consistent colors
-                    let hash = 0;
-                    for (let i = 0; i < app.id.length; i++) {
-                        hash = app.id.charCodeAt(i) + ((hash << 5) - hash);
+                    if (app?.colors?.gradient) {
+                        return app.colors.gradient;
                     }
-                    
-                    // Generate hue from hash (0-360)
-                    const hue1 = Math.abs(hash % 360);
-                    const hue2 = (hue1 + 30) % 360; // Slight shift for gradient
-                    
-                    // Use vibrant saturation and lightness
-                    const sat = 65 + (Math.abs(hash >> 8) % 20); // 65-85%
-                    const light = 45 + (Math.abs(hash >> 16) % 15); // 45-60%
-                    
-                    return `linear-gradient(135deg, hsl(${hue1}, ${sat}%, ${light}%) 0%, hsl(${hue2}, ${sat}%, ${light + 10}%) 100%)`;
-                },
-                
-                // Get primary color from app (for icon background)
-                getAppPrimaryColor(app) {
-                    if (!app?.id) return '#22C55E';
-                    
-                    let hash = 0;
-                    for (let i = 0; i < app.id.length; i++) {
-                        hash = app.id.charCodeAt(i) + ((hash << 5) - hash);
+                    // Fallback: use primary color if available
+                    if (app?.colors?.primary) {
+                        return `linear-gradient(135deg, ${app.colors.primary} 0%, ${app.colors.primary}dd 100%)`;
                     }
-                    
-                    const hue = Math.abs(hash % 360);
-                    const sat = 65 + (Math.abs(hash >> 8) % 20);
-                    const light = 40 + (Math.abs(hash >> 16) % 10);
-                    
-                    return `hsl(${hue}, ${sat}%, ${light}%)`;
+                    return 'linear-gradient(135deg, #22C55E 0%, #4ADE80 100%)';
                 },
                 
                 updateTimeOfDay() {
