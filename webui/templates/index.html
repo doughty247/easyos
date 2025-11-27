@@ -3,183 +3,261 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EASY Setup</title>
+    <title>EASYOS Dashboard</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --bg: #f3f4f6;
+            --text: #1f2937;
+            --sidebar-width: 250px;
         }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            max-width: 600px;
-            width: 100%;
-            padding: 40px;
-        }
-        .banner {
-            background: #fef3c7;
-            border-left: 4px solid #f59e0b;
-            padding: 16px;
-            margin-bottom: 24px;
-            border-radius: 4px;
-        }
-        .banner h3 {
-            color: #92400e;
-            font-size: 16px;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-        }
-        .banner h3::before {
-            content: "ℹ️";
-            margin-right: 8px;
-            font-size: 20px;
-        }
-        .banner p {
-            color: #78350f;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-        .banner ul {
-            margin-top: 8px;
-            margin-left: 20px;
-            color: #78350f;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-        h1 {
-            color: #1f2937;
-            margin-bottom: 8px;
-            font-size: 28px;
-        }
-        .subtitle {
-            color: #6b7280;
-            margin-bottom: 32px;
-            font-size: 16px;
-        }
-        .info-section {
-            background: #f3f4f6;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 24px;
-        }
-        .info-section h2 {
-            color: #374151;
-            font-size: 18px;
-            margin-bottom: 12px;
-        }
-        .info-section p {
-            color: #4b5563;
-            line-height: 1.6;
-            margin-bottom: 8px;
-        }
-        .info-section code {
-            background: #e5e7eb;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: "Courier New", monospace;
-            font-size: 13px;
-        }
-        .action-buttons {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .btn {
-            padding: 14px 24px;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            text-align: center;
-            transition: all 0.2s;
-            display: block;
-        }
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-        .btn-primary:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-        .btn-secondary {
-            background: #e5e7eb;
-            color: #374151;
-        }
-        .btn-secondary:hover {
-            background: #d1d5db;
-        }
-        .footer {
-            margin-top: 32px;
-            padding-top: 24px;
-            border-top: 1px solid #e5e7eb;
-            text-align: center;
-            color: #6b7280;
-            font-size: 14px;
-        }
-        .footer a {
-            color: #667eea;
-            text-decoration: none;
-        }
-        .footer a:hover {
-            text-decoration: underline;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Sidebar */
+        .sidebar { width: var(--sidebar-width); background: white; border-right: 1px solid #e5e7eb; display: flex; flex-direction: column; padding: 20px; }
+        .brand { font-size: 24px; font-weight: bold; color: var(--primary); margin-bottom: 40px; display: flex; align-items: center; gap: 10px; }
+        .nav-item { padding: 12px 16px; border-radius: 8px; color: #4b5563; cursor: pointer; transition: all 0.2s; margin-bottom: 4px; display: flex; align-items: center; gap: 12px; }
+        .nav-item:hover { background: #f3f4f6; color: var(--primary); }
+        .nav-item.active { background: #eff6ff; color: var(--primary); font-weight: 600; }
+        
+        /* Main Content */
+        .main { flex: 1; overflow-y: auto; padding: 40px; }
+        .view { display: none; }
+        .view.active { display: block; }
+        
+        h1 { font-size: 28px; margin-bottom: 24px; }
+        
+        /* Cards */
+        .card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 24px; }
+        .card h2 { font-size: 18px; margin-bottom: 16px; color: #374151; }
+        
+        /* Apps Grid */
+        .apps-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; }
+        .app-card { background: white; border-radius: 12px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 16px; }
+        .app-header { display: flex; align-items: center; gap: 16px; }
+        .app-icon { width: 48px; height: 48px; background: #e0e7ff; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; color: var(--primary); }
+        .app-info h3 { font-size: 18px; margin-bottom: 4px; }
+        .app-info p { color: #6b7280; font-size: 14px; }
+        .app-status { font-size: 12px; padding: 4px 8px; border-radius: 99px; background: #f3f4f6; color: #6b7280; width: fit-content; }
+        .app-status.installed { background: #dcfce7; color: #166534; }
+        
+        /* Buttons */
+        .btn { padding: 8px 16px; border-radius: 6px; border: none; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { opacity: 0.9; }
+        .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; }
+        .btn-outline:hover { border-color: #9ca3af; }
+        
+        /* Log */
+        #log-viewer { background: #1f2937; color: #10b981; padding: 16px; border-radius: 8px; font-family: monospace; height: 400px; overflow-y: auto; white-space: pre-wrap; font-size: 13px; }
+        
+        /* Editor */
+        textarea#config-editor { width: 100%; height: 400px; font-family: monospace; padding: 16px; border: 1px solid #d1d5db; border-radius: 8px; resize: vertical; }
+        
+        /* Status Bar */
+        .status-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e5e7eb; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; z-index: 100; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="banner">
-            <h3>Setup Network Notice</h3>
-            <p>This hotspot is isolated for initial setup only:</p>
-            <ul>
-                <li>No internet access from this Wi-Fi network</li>
-                <li>Captive portal accessible only at 10.42.0.1:8088</li>
-                <li>For security, hotspot is not exposed on WAN/LAN</li>
-            </ul>
-            <p style="margin-top: 8px;">To enable internet during setup, configure <code>"hotspotAllowWAN": true</code> in your config.</p>
+    <div class="sidebar">
+        <div class="brand">⚡ EASYOS</div>
+        <div class="nav-item active" onclick="switchView('dashboard')">📊 Dashboard</div>
+        <div class="nav-item" onclick="switchView('apps')">🛍️ App Store</div>
+        <div class="nav-item" onclick="switchView('settings')">⚙️ Settings</div>
+        <div class="nav-item" onclick="switchView('logs')">📝 Build Logs</div>
+    </div>
+    
+    <div class="main">
+        <!-- Dashboard -->
+        <div id="view-dashboard" class="view active">
+            <h1>Dashboard</h1>
+            <div class="card">
+                <h2>System Status</h2>
+                <p><strong>Status:</strong> <span id="system-status">Checking...</span></p>
+                <p><strong>IP Address:</strong> <span id="ip-address">Loading...</span></p>
+            </div>
+            <div class="card">
+                <h2>Quick Actions</h2>
+                <button class="btn btn-primary" onclick="saveAndApply()">Apply Pending Changes</button>
+            </div>
         </div>
-
-        <h1>Welcome to EASY</h1>
-        <p class="subtitle">Your NixOS-based appliance setup portal</p>
-
-        <div class="info-section">
-            <h2>Getting Started</h2>
-            <p>You're connected to the <strong>EASY-Setup</strong> hotspot. This is your configuration interface for the appliance.</p>
-            <p>The system is currently running in first-run mode. Use the options below to configure and manage your installation.</p>
+        
+        <!-- Apps -->
+        <div id="view-apps" class="view">
+            <h1>App Store</h1>
+            <div class="apps-grid">
+                <!-- Immich -->
+                <div class="app-card">
+                    <div class="app-header">
+                        <div class="app-icon">📷</div>
+                        <div class="app-info">
+                            <h3>Immich</h3>
+                            <p>Self-hosted photo and video backup solution.</p>
+                        </div>
+                    </div>
+                    <div class="app-status" id="status-immich">Not Installed</div>
+                    <button class="btn btn-outline" id="btn-immich" onclick="toggleApp('immich')">Install</button>
+                </div>
+            </div>
         </div>
-
-        <div class="info-section">
-            <h2>Network Information</h2>
-            <p><strong>Hotspot SSID:</strong> EASY-Setup</p>
-            <p><strong>Portal Address:</strong> http://10.42.0.1:8088</p>
-            <p><strong>Mode:</strong> Walled Garden (No WAN by default)</p>
+        
+        <!-- Settings -->
+        <div id="view-settings" class="view">
+            <h1>Configuration</h1>
+            <div class="card">
+                <textarea id="config-editor"></textarea>
+                <div style="margin-top: 16px; display: flex; gap: 12px;">
+                    <button class="btn btn-primary" onclick="saveConfig()">Save Config</button>
+                    <button class="btn btn-outline" onclick="loadConfig()">Reload</button>
+                </div>
+            </div>
         </div>
-
-        <div class="action-buttons">
-            <a href="/config" class="btn btn-primary">Configure System</a>
-            <a href="/status" class="btn btn-secondary">View System Status</a>
-            <a href="/docs" class="btn btn-secondary">Documentation</a>
-        </div>
-
-        <div class="footer">
-            <p>EasyOS on NixOS 24.11 | <a href="https://github.com/doughty247/easyos" target="_blank">GitHub</a></p>
-            <p style="margin-top: 8px; font-size: 12px;">For help, type <code>easy-help</code> in the terminal</p>
+        
+        <!-- Logs -->
+        <div id="view-logs" class="view">
+            <h1>Build Logs</h1>
+            <div id="log-viewer">Waiting for logs...</div>
         </div>
     </div>
+    
+    <div class="status-bar">
+        <span id="apply-state">Idle</span>
+        <button class="btn btn-primary" id="global-apply-btn" onclick="saveAndApply()">Save & Apply</button>
+    </div>
+
+    <script>
+        let currentConfig = {};
+        let isApplying = false;
+        
+        // Navigation
+        function switchView(viewName) {
+            document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+            document.getElementById('view-' + viewName).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+        
+        // API Calls
+        async function loadConfig() {
+            try {
+                const res = await fetch('/api/config');
+                currentConfig = await res.json();
+                document.getElementById('config-editor').value = JSON.stringify(currentConfig, null, 2);
+                updateAppStatus();
+            } catch (e) {
+                console.error('Failed to load config', e);
+            }
+        }
+        
+        async function saveConfig() {
+            try {
+                const text = document.getElementById('config-editor').value;
+                currentConfig = JSON.parse(text);
+                await fetch('/api/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(currentConfig)
+                });
+                updateAppStatus();
+                // alert('Configuration saved!'); // Annoying
+            } catch (e) {
+                alert('Invalid JSON: ' + e.message);
+            }
+        }
+        
+        async function saveAndApply() {
+            if (isApplying) return;
+            isApplying = true;
+            document.getElementById('global-apply-btn').disabled = true;
+            document.getElementById('global-apply-btn').textContent = 'Applying...';
+            
+            await saveConfig(); // Save first
+            
+            await fetch('/api/apply', { method: 'POST' });
+            switchView('logs');
+        }
+        
+        // App Store Logic
+        function updateAppStatus() {
+            const apps = currentConfig.apps || {};
+            
+            // Immich
+            const immichEnabled = apps.immich && apps.immich.enable;
+            const statusEl = document.getElementById('status-immich');
+            const btnEl = document.getElementById('btn-immich');
+            
+            if (immichEnabled) {
+                statusEl.textContent = 'Installed';
+                statusEl.classList.add('installed');
+                btnEl.textContent = 'Uninstall';
+                btnEl.classList.remove('btn-primary');
+                btnEl.classList.add('btn-outline');
+            } else {
+                statusEl.textContent = 'Not Installed';
+                statusEl.classList.remove('installed');
+                btnEl.textContent = 'Install';
+                btnEl.classList.remove('btn-outline');
+                btnEl.classList.add('btn-primary');
+            }
+        }
+        
+        function toggleApp(appName) {
+            currentConfig.apps = currentConfig.apps || {};
+            currentConfig.apps[appName] = currentConfig.apps[appName] || {};
+            
+            const currentlyEnabled = currentConfig.apps[appName].enable;
+            currentConfig.apps[appName].enable = !currentlyEnabled;
+            
+            document.getElementById('config-editor').value = JSON.stringify(currentConfig, null, 2);
+            saveConfig(); // Auto-save on toggle
+            updateAppStatus(); // Force update UI
+        }
+        
+        // Polling
+        async function poll() {
+            try {
+                const res = await fetch('/api/status');
+                const j = await res.json();
+                const active = j.active === 'active';
+                const logEl = document.getElementById('log-viewer');
+                const stateEl = document.getElementById('apply-state');
+                
+                // Update Log
+                if (j.log && j.log.trim()) {
+                    logEl.textContent = j.log;
+                    logEl.scrollTop = logEl.scrollHeight;
+                } else if (!active) {
+                    // Fix for endless repeat: only append if not already there
+                    if (!logEl.textContent.endsWith('Rebuild complete. System updated.')) {
+                        if (logEl.textContent.length > 0) {
+                             logEl.textContent += '\n\nRebuild complete. System updated.';
+                             logEl.scrollTop = logEl.scrollHeight;
+                        }
+                    }
+                }
+                
+                // Update State
+                stateEl.textContent = active ? 'Applying Changes...' : 'Idle';
+                document.getElementById('system-status').textContent = active ? 'Updating...' : 'Ready';
+                
+                if (!active && isApplying) {
+                    isApplying = false;
+                    document.getElementById('global-apply-btn').disabled = false;
+                    document.getElementById('global-apply-btn').textContent = 'Save & Apply';
+                }
+                
+            } catch (e) {}
+            setTimeout(poll, 1000);
+        }
+        
+        // Init
+        loadConfig();
+        poll();
+        
+        // Get IP (mock for now, or fetch from somewhere if available)
+        document.getElementById('ip-address').textContent = window.location.hostname;
+    </script>
 </body>
 </html>

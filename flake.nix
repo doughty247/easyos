@@ -49,6 +49,7 @@
               ./modules/backup.nix
               ./modules/storage-expansion.nix
               ./modules/webui.nix
+              ./modules/apps.nix
 
               # Home Manager integration
               home-manager.nixosModules.home-manager
@@ -84,6 +85,7 @@
           # Include webui and hotspot modules in ISO for live testing/configuration
           ./modules/webui.nix
           ./modules/hotspot.nix
+          ./modules/apps.nix
           {
             # Set state version for the ISO
             system.stateVersion = "24.11";
