@@ -16,78 +16,75 @@ Most self-hosting solutions give you a dashboard on top of Docker and call it a 
 
 ---
 
-## The Problem with Self-Hosting Today
+## Why Not CasaOS, Umbrel, or Unraid?
 
-**CasaOS, Umbrel, TrueNAS Scale, Unraid** — they all solve the "make Docker pretty" problem. But:
+They solve the "make Docker pretty" problem. But:
 
 - Update breaks something? Hope you have backups.
 - New server? Reinstall everything manually.
 - What changed since last week? No idea.
-- Mix of Docker + native apps? Good luck.
 
 These tools are **wrappers**, not operating systems. They can't protect you from themselves.
 
 ---
 
-## How easeOS is Different
+## Features
 
-### Declarative, Not Imperative
+### Seed Store
+Browse and install self-hosted apps with one click. Each app is pre-configured to work out of the box:
+- **Immich** — Google Photos replacement with AI search
+- **Nextcloud** — Files, calendar, contacts
+- **Home Assistant** — Smart home automation
+- **Jellyfin** — Media streaming
+- **Vaultwarden** — Password manager
 
-Your entire system — OS, apps, configs — is defined in one place. This isn't a gimmick:
-
-```
-Traditional: "Install app A, then configure X, then install B..."
-easeOS:      "The system has apps A and B with these configs." (done)
-```
-
-The system figures out how to get there. Every time. Reproducibly.
+### Web Interface
+Manage your server from any browser at `http://<ip>:1234`:
+- Install and configure apps
+- Monitor system status
+- Adjust settings
+- No SSH required (but it's there when you need it)
 
 ### Atomic Updates with Rollback
-
 Every change creates a new system generation. The old one stays bootable.
 
 ```bash
-# Something went wrong after an update?
+# Something broke? Undo it.
 sudo nixos-rebuild switch --rollback
-
-# Or just pick a previous generation from the boot menu
 ```
 
 No snapshots to manage. No backup/restore dance. Just... undo.
 
 ### Repair, Don't Reinstall
-
-Corrupted config? Weird state? Just rebuild:
+Weird state? Just rebuild. The system converges to the declared state — every file, every service, every permission.
 
 ```bash
 sudo nixos-rebuild switch --impure --flake /etc/nixos/easyos#easyos
 ```
 
-The system converges to the declared state. Every file, every service, every permission — rebuilt exactly as specified. This is what "infrastructure as code" actually means.
+This is what "infrastructure as code" actually means.
 
 ### Clone Your Entire Server
-
 Moving to new hardware? Your system is a ~50KB flake:
 
 1. Copy `/etc/nixos/easyos` to new machine
 2. Run the installer
 3. Done. Identical system.
 
-No migration tools. No export/import. Just... the same system.
+### Secure by Default
+- Full-disk encryption with TPM2 auto-unlock
+- Firewall configured out of the box
+- Client isolation on guest networks
 
----
+### Bulletproof Storage
+- Btrfs with compression and snapshots
+- Automated daily backups
+- Easy expansion — just add drives
 
-## But What About the Simple Stuff?
-
-Yes, you still get the friendly parts:
-
-- **Web UI** at `http://<ip>:1234` — manage apps without terminal
-- **Seed Store** — one-click installs for Immich, Nextcloud, Home Assistant, etc.
-- **Auto-setup** — boots into WiFi hotspot, guides you through config
-- **TPM2 encryption** — full disk encryption with auto-unlock
-- **Btrfs snapshots** — automated backups built in
-
-The difference is what's underneath. When the web UI can't help, you're not stranded.
+### Zero-Config Networking
+- Auto-creates WiFi hotspot for initial setup
+- Captive portal guides you through config
+- Automatic network optimization (CAKE QoS, BBR)
 
 ---
 
@@ -102,6 +99,12 @@ cd easyos/easyos
 # Or with --ventoy to copy to USB
 ./build-iso-docker.sh --ventoy
 ```
+
+### Installation
+1. Boot from USB
+2. Connect to network (prompted if needed)
+3. Follow the guided installer
+4. Access web UI at `http://<your-ip>:1234`
 
 ---
 
@@ -120,13 +123,26 @@ cd easyos/easyos
 
 ---
 
-## The Technical Bits
+## System Requirements
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| CPU | x86_64, 2 cores | 4+ cores |
+| RAM | 4 GB | 8+ GB |
+| Storage | 32 GB SSD | 256+ GB SSD |
+| Network | Ethernet or WiFi | Gigabit Ethernet |
+
+Works great on: Mini PCs, old laptops, Intel NUCs
+
+---
+
+## Technical Details
 
 | Component | Choice | Why |
 |-----------|--------|-----|
 | Base OS | NixOS 24.11 | Declarative, reproducible, rollback |
 | Filesystem | Btrfs | Snapshots, compression, expansion |
-| Boot | systemd-boot / GRUB | Auto-selected, both work |
+| Boot | systemd-boot / GRUB | Auto-selected |
 | Encryption | LUKS2 + TPM2 | Modern, hardware-backed |
 | Network | NetworkManager | Just works |
 | Apps | Native NixOS modules | Not containers pretending to be native |
@@ -149,9 +165,9 @@ cd easyos/easyos
 
 ## Contributing
 
-- 📦 [Create apps for the Seed Store](store/SDK.md)
-- 🐛 [Report issues](https://github.com/doughty247/easyos/issues)
-- 💬 [Discussions](https://github.com/doughty247/easyos/discussions)
+- [Create apps for the Seed Store](store/SDK.md)
+- [Report issues](https://github.com/doughty247/easyos/issues)
+- [Discussions](https://github.com/doughty247/easyos/discussions)
 
 ---
 
