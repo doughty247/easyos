@@ -4,9 +4,9 @@
   <img src="assets/logo.svg" alt="easeOS mascot" width="120">
 </p>
 
-**The home server that fixes itself.**
+**A home server you can set and forget.**
 
-Built on NixOS. Your entire system is code. Break something? Roll back in seconds. New hardware? Clone your setup in minutes.
+Install it once. Add your apps. Stop worrying about it. Updates won't break things. If something goes wrong, undo it from the boot menu.
 
 <p align="center">
   <img src="https://img.shields.io/badge/NixOS_24.11-5277C3?style=flat-square&logo=nixos" alt="NixOS 24.11">
@@ -20,18 +20,18 @@ Built on NixOS. Your entire system is code. Break something? Roll back in second
 
 - **Web UI** at `http://<ip>:1234` — install apps, change settings, no terminal needed
 - **Seed Store** — one-click installs: Immich, Nextcloud, Home Assistant, Jellyfin, Vaultwarden
-- **Atomic rollback** — every update is reversible from the boot menu
-- **TPM2 encryption** — full disk, auto-unlocks on your hardware
-- **Btrfs snapshots** — automated backups, just add a drive
-- **WiFi setup mode** — boots into hotspot, captive portal walks you through config
+- **Undo button** — every update is reversible from the boot menu
+- **Encrypted by default** — full disk, auto-unlocks on your hardware
+- **Automatic backups** — just plug in a drive
+- **WiFi setup** — boots into hotspot, walks you through config
 
 ---
 
 ## Why Not CasaOS/Umbrel/Unraid?
 
-They're Docker wrappers. When updates break things, you restore backups and hope.
+They make Docker pretty. But when an update breaks something, you're restoring backups and crossing your fingers.
 
-easeOS rebuilds your entire system from a declaration. Same result every time. Move to new hardware by copying one folder.
+easeOS lets you undo. Pick a previous version from the boot menu and you're back. No restore, no downtime, no stress.
 
 ---
 
@@ -56,7 +56,7 @@ x86_64, 4GB+ RAM, 32GB+ SSD. Works on mini PCs, old laptops, NUCs.
 
 ## Roadmap
 
-Done: Web UI, Seed Store, TPM2 encryption, Btrfs backups
+Done: Web UI, Seed Store, encryption, backups
 
 Next: Pre-built ISOs, ARM64/Pi 5, Tailscale
 
