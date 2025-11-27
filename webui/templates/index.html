@@ -1052,7 +1052,7 @@
     <aside class="mobile-sidebar bg-white/50 backdrop-blur-2xl p-6 flex flex-col shadow-2xl border-r border-white/30 safe-top"
            :class="{ 'open': sidebarOpen }">
         <!-- Same content as desktop sidebar -->
-        <div class="flex items-center gap-3 mb-8 px-2">
+        <div class="flex items-center justify-center gap-3 mb-8 px-2">
             <div class="w-12 h-12 relative cursor-watering-can"
                  :class="{ 'plant-happy': isHappy, 'plant-sway': !isHappy }"
                  @touchstart="startWatering()"
@@ -1145,7 +1145,7 @@
         <aside class="desktop-sidebar w-64 bg-white/50 backdrop-blur-2xl rounded-[2rem] p-6 flex flex-col shadow-card border border-white/30 resize-transition">
             
             <!-- Logo -->
-            <div class="flex items-center gap-3 mb-10 px-2">
+            <div class="flex items-center justify-center gap-3 mb-10 px-2">
                 <div class="w-14 h-14 relative cursor-watering-can"
                      :class="{ 'plant-happy': isHappy, 'plant-sway': !isHappy }"
                      @mousedown="startWatering()"
@@ -1377,7 +1377,6 @@
                     <!-- Store Header -->
                     <div class="mb-6">
                         <div class="flex flex-col md:flex-row md:items-center gap-4 mb-4">
-                            <h2 class="text-2xl font-extrabold text-gray-800">Seed Store</h2>
                             <div class="flex-1">
                                 <div class="relative">
                                     <input type="text" 
@@ -1483,14 +1482,194 @@
                 </div>
                 
                 <!-- Settings View -->
-                <div x-show="currentView === 'settings'" x-cloak class="slide-up">
+                <div x-show="currentView === 'settings'" x-cloak class="slide-up space-y-6">
+                    
+                    <!-- System Settings -->
                     <div class="bg-white/70 backdrop-blur-2xl rounded-3xl p-6 shadow-card border border-white/40">
-                        <h3 class="font-bold text-gray-800 mb-2">Advanced Configuration</h3>
-                        <p class="text-gray-500 text-sm mb-4">Fine-tune your garden. Changes are staged until you grow.</p>
-                        <textarea x-model="configText" 
-                                  @input="onConfigEdit()"
-                                  class="w-full h-96 p-5 bg-gray-50 rounded-2xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-0 outline-none font-mono text-sm resize-none transition-colors"></textarea>
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 bg-ease-leaf/10 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5 text-ease-leaf" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-800">System</h3>
+                                <p class="text-gray-500 text-sm">Basic system settings</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-600 mb-2">Hostname</label>
+                                <input type="text" 
+                                       :value="config.hostName || 'easyos'"
+                                       @input="config.hostName = $event.target.value; onConfigChange()"
+                                       class="w-full px-4 py-3 bg-gray-50 rounded-xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-0 outline-none transition-colors"
+                                       placeholder="easyos">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-600 mb-2">Time Zone</label>
+                                <select :value="config.timeZone || 'UTC'"
+                                        @change="config.timeZone = $event.target.value; onConfigChange()"
+                                        class="w-full px-4 py-3 bg-gray-50 rounded-xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-0 outline-none transition-colors">
+                                    <option value="UTC">UTC</option>
+                                    <option value="America/New_York">America/New_York</option>
+                                    <option value="America/Chicago">America/Chicago</option>
+                                    <option value="America/Denver">America/Denver</option>
+                                    <option value="America/Los_Angeles">America/Los_Angeles</option>
+                                    <option value="Europe/London">Europe/London</option>
+                                    <option value="Europe/Paris">Europe/Paris</option>
+                                    <option value="Europe/Berlin">Europe/Berlin</option>
+                                    <option value="Asia/Tokyo">Asia/Tokyo</option>
+                                    <option value="Asia/Shanghai">Asia/Shanghai</option>
+                                    <option value="Australia/Sydney">Australia/Sydney</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-600 mb-2">Swap Size (MB)</label>
+                                <input type="number" 
+                                       :value="config.swapMiB || 4096"
+                                       @input="config.swapMiB = parseInt($event.target.value); onConfigChange()"
+                                       class="w-full px-4 py-3 bg-gray-50 rounded-xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-0 outline-none transition-colors"
+                                       min="1024" max="32768" step="1024">
+                            </div>
+                        </div>
                     </div>
+                    
+                    <!-- Network Settings -->
+                    <div class="bg-white/70 backdrop-blur-2xl rounded-3xl p-6 shadow-card border border-white/40">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-800">Network & Hotspot</h3>
+                                <p class="text-gray-500 text-sm">WiFi hotspot and network settings</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-600 mb-2">Hotspot SSID</label>
+                                    <input type="text" 
+                                           :value="config.network?.ssid || 'EASY-Setup'"
+                                           @input="if(!config.network) config.network = {}; config.network.ssid = $event.target.value; onConfigChange()"
+                                           class="w-full px-4 py-3 bg-gray-50 rounded-xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-0 outline-none transition-colors">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-600 mb-2">WiFi Channel</label>
+                                    <select :value="config.network?.wifiChannel || '6'"
+                                            @change="if(!config.network) config.network = {}; config.network.wifiChannel = $event.target.value; onConfigChange()"
+                                            class="w-full px-4 py-3 bg-gray-50 rounded-xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-0 outline-none transition-colors">
+                                        <option value="1">1</option>
+                                        <option value="6">6</option>
+                                        <option value="11">11</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-600 mb-2">Download Speed (Mbps)</label>
+                                    <input type="text" 
+                                           :value="config.network?.qosDownloadMbps || '100'"
+                                           @input="if(!config.network) config.network = {}; config.network.qosDownloadMbps = $event.target.value; onConfigChange()"
+                                           class="w-full px-4 py-3 bg-gray-50 rounded-xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-0 outline-none transition-colors">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-600 mb-2">Upload Speed (Mbps)</label>
+                                    <input type="text" 
+                                           :value="config.network?.qosUploadMbps || '20'"
+                                           @input="if(!config.network) config.network = {}; config.network.qosUploadMbps = $event.target.value; onConfigChange()"
+                                           class="w-full px-4 py-3 bg-gray-50 rounded-xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-0 outline-none transition-colors">
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-4 pt-2">
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" 
+                                           :checked="config.network?.qosEnabled !== false"
+                                           @change="if(!config.network) config.network = {}; config.network.qosEnabled = $event.target.checked; onConfigChange()"
+                                           class="w-5 h-5 rounded border-gray-300 text-ease-leaf focus:ring-ease-leaf">
+                                    <span class="text-sm font-medium text-gray-700">QoS Enabled</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" 
+                                           :checked="config.network?.clientIsolation !== false"
+                                           @change="if(!config.network) config.network = {}; config.network.clientIsolation = $event.target.checked; onConfigChange()"
+                                           class="w-5 h-5 rounded border-gray-300 text-ease-leaf focus:ring-ease-leaf">
+                                    <span class="text-sm font-medium text-gray-700">Client Isolation</span>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" 
+                                           :checked="config.network?.hotspotAllowWAN === true"
+                                           @change="if(!config.network) config.network = {}; config.network.hotspotAllowWAN = $event.target.checked; onConfigChange()"
+                                           class="w-5 h-5 rounded border-gray-300 text-ease-leaf focus:ring-ease-leaf">
+                                    <span class="text-sm font-medium text-gray-700">Allow WAN Access</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Backup Settings -->
+                    <div class="bg-white/70 backdrop-blur-2xl rounded-3xl p-6 shadow-card border border-white/40">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center">
+                                <svg class="w-5 h-5 text-purple-500" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14h-2V9h-2l3-4 3 4h-2v8z"/></svg>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-800">Backup</h3>
+                                <p class="text-gray-500 text-sm">Automated backup settings</p>
+                            </div>
+                            <label class="ml-auto flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" 
+                                       :checked="config.backup?.enable === true"
+                                       @change="if(!config.backup) config.backup = {}; config.backup.enable = $event.target.checked; onConfigChange()"
+                                       class="w-5 h-5 rounded border-gray-300 text-ease-leaf focus:ring-ease-leaf">
+                                <span class="text-sm font-medium text-gray-700">Enabled</span>
+                            </label>
+                        </div>
+                        <div class="space-y-4" x-show="config.backup?.enable">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-600 mb-2">Backup Target</label>
+                                    <input type="text" 
+                                           :value="config.backup?.target || '/srv/backup'"
+                                           @input="if(!config.backup) config.backup = {}; config.backup.target = $event.target.value; onConfigChange()"
+                                           class="w-full px-4 py-3 bg-gray-50 rounded-xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-0 outline-none transition-colors"
+                                           placeholder="/srv/backup">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-600 mb-2">Schedule</label>
+                                    <select :value="config.backup?.onCalendar || 'daily'"
+                                            @change="if(!config.backup) config.backup = {}; config.backup.onCalendar = $event.target.value; onConfigChange()"
+                                            class="w-full px-4 py-3 bg-gray-50 rounded-xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-0 outline-none transition-colors">
+                                        <option value="hourly">Hourly</option>
+                                        <option value="daily">Daily</option>
+                                        <option value="weekly">Weekly</option>
+                                        <option value="monthly">Monthly</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced (Raw JSON) -->
+                    <div class="bg-white/70 backdrop-blur-2xl rounded-3xl p-6 shadow-card border border-white/40">
+                        <details class="group">
+                            <summary class="flex items-center gap-3 cursor-pointer list-none">
+                                <div class="w-10 h-10 bg-gray-500/10 rounded-xl flex items-center justify-center">
+                                    <svg class="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 24 24"><path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>
+                                </div>
+                                <div class="flex-1">
+                                    <h3 class="font-bold text-gray-800">Advanced Configuration</h3>
+                                    <p class="text-gray-500 text-sm">Edit raw JSON config (for experts)</p>
+                                </div>
+                                <svg class="w-5 h-5 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </summary>
+                            <div class="mt-4">
+                                <textarea x-model="configText" 
+                                          @input="onConfigEdit()"
+                                          class="w-full h-64 p-5 bg-gray-50 rounded-2xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-0 outline-none font-mono text-sm resize-none transition-colors"></textarea>
+                            </div>
+                        </details>
+                    </div>
+                    
                 </div>
                 
                 <!-- Logs View -->
@@ -1897,6 +2076,12 @@
                     try {
                         this.config = JSON.parse(this.configText);
                     } catch (e) {}
+                },
+                
+                onConfigChange() {
+                    // Update the JSON text to match the form changes
+                    this.configText = JSON.stringify(this.config, null, 2);
+                    this.saveConfig();
                 },
                 
                 async saveConfig() {
