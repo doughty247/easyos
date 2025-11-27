@@ -1,163 +1,166 @@
 # easeOS
 
-**Your personal cloud, simplified.**
+**The home server that fixes itself.**
 
-easeOS is a self-hosted home server operating system that makes running your own cloud services as easy as using commercial alternatives — but with full privacy and control. No subscriptions, no data harvesting, no vendor lock-in.
+Most self-hosting solutions give you a dashboard on top of Docker and call it a day. When something breaks, you're on your own. easeOS is different — it's built on NixOS, which means your entire system is defined in code and can be rebuilt identically at any time.
 
-Built on NixOS, easeOS combines the reliability of declarative configuration with the simplicity of a consumer appliance. Install apps like Immich (Google Photos replacement), Nextcloud, Home Assistant, or Jellyfin with a single click. Everything just works.
+> **Break something? Roll back in seconds.**  
+> **New hardware? Clone your entire setup.**  
+> **Curious what changed? Diff any two system states.**
 
 <p align="center">
-  <img src="https://img.shields.io/badge/NixOS-24.11-5277C3?style=flat-square&logo=nixos" alt="NixOS 24.11">
+  <img src="https://img.shields.io/badge/Built_on-NixOS_24.11-5277C3?style=flat-square&logo=nixos" alt="NixOS 24.11">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Alpha-orange?style=flat-square" alt="Alpha">
 </p>
 
 ---
 
-## Why easeOS?
+## The Problem with Self-Hosting Today
 
-| Problem | easeOS Solution |
-|---------|-----------------|
-| Self-hosting is complicated | One-click app installs via web UI |
-| Server setup takes hours | 10-minute guided installer |
-| Configuration files are confusing | Visual settings, no terminal required |
-| Updates break things | Atomic updates with automatic rollback |
-| Backups are an afterthought | Built-in automated backups |
-| Security is hard to get right | TPM2 encryption, automatic updates |
+**CasaOS, Umbrel, TrueNAS Scale, Unraid** — they all solve the "make Docker pretty" problem. But:
 
-## Features
+- 🔥 Update breaks something? Hope you have backups.
+- 🤷 New server? Reinstall everything manually.
+- 🕵️ What changed since last week? No idea.
+- 📦 Mix of Docker + native apps? Good luck.
 
-### 🌱 **Seed Store** — Install apps instantly
-Browse and install self-hosted apps from the built-in store. Each app is pre-configured to work out of the box:
-- **Immich** — Google Photos alternative with AI-powered search
-- **Nextcloud** — Files, calendar, contacts, and more
-- **Home Assistant** — Smart home automation
-- **Jellyfin** — Media streaming for your library
-- **Vaultwarden** — Password manager (Bitwarden-compatible)
+These tools are **wrappers**, not operating systems. They can't protect you from themselves.
 
-### 🖥️ **Web Interface**
-Manage your server from any browser — no SSH required:
-- Install and configure apps
-- Monitor system status
-- Adjust settings
-- View logs and troubleshoot
+---
 
-### 🔒 **Secure by Default**
-- Optional full-disk encryption with TPM2 auto-unlock
-- Automatic security updates
-- Firewall configured out of the box
-- Client isolation on guest networks
+## How easeOS is Different
 
-### 💾 **Bulletproof Storage**
-- Btrfs filesystem with compression and snapshots
-- Automated daily backups
-- Easy storage expansion — just add drives
-- Snapshot rollback if something goes wrong
+### 🧬 Declarative, Not Imperative
 
-### 📶 **Zero-Config Networking**
-- Auto-creates WiFi hotspot for initial setup
-- Captive portal guides you through configuration
-- Automatic network optimization (CAKE QoS, BBR)
-- Works with Ethernet or WiFi
+Your entire system — OS, apps, configs — is defined in one place. This isn't a gimmick:
+
+```
+Traditional: "Install app A, then configure X, then install B..."
+easeOS:      "The system has apps A and B with these configs." (done)
+```
+
+The system figures out how to get there. Every time. Reproducibly.
+
+### ⏪ Atomic Updates with Rollback
+
+Every change creates a new system generation. The old one stays bootable.
+
+```bash
+# Something went wrong after an update?
+sudo nixos-rebuild switch --rollback
+
+# Or just pick a previous generation from the boot menu
+```
+
+No snapshots to manage. No backup/restore dance. Just... undo.
+
+### 🔧 Repair, Don't Reinstall
+
+Corrupted config? Weird state? Just rebuild:
+
+```bash
+sudo nixos-rebuild switch --impure --flake /etc/nixos/easyos#easyos
+```
+
+The system converges to the declared state. Every file, every service, every permission — rebuilt exactly as specified. This is what "infrastructure as code" actually means.
+
+### 📋 Clone Your Entire Server
+
+Moving to new hardware? Your system is a ~50KB flake:
+
+1. Copy `/etc/nixos/easyos` to new machine
+2. Run the installer
+3. Done. Identical system.
+
+No migration tools. No export/import. Just... the same system.
+
+---
+
+## But What About the Simple Stuff?
+
+Yes, you still get the friendly parts:
+
+- **Web UI** at `http://<ip>:1234` — manage apps without terminal
+- **Seed Store** — one-click installs for Immich, Nextcloud, Home Assistant, etc.
+- **Auto-setup** — boots into WiFi hotspot, guides you through config
+- **TPM2 encryption** — full disk encryption with auto-unlock
+- **Btrfs snapshots** — automated backups built in
+
+The difference is what's underneath. When the web UI can't help, you're not stranded.
 
 ---
 
 ## Quick Start
 
-### Option 1: Download ISO (Coming Soon)
-Pre-built ISOs will be available for direct download.
-
-### Option 2: Build from Source
-
-On any Linux system with Docker or Podman:
-
 ```bash
+# Build the ISO (any Linux with Docker/Podman)
 git clone https://github.com/doughty247/easyos.git
 cd easyos/easyos
-./build-iso-docker.sh --vm    # Build and test in VM
+./build-iso-docker.sh --vm    # Test in VM first
+
+# Or with --ventoy to copy to USB
+./build-iso-docker.sh --ventoy
 ```
 
-### Installation
+---
 
-1. Boot from USB (Ventoy recommended)
-2. Connect to network (prompted if needed)
-3. Follow the guided installer
-4. Access web UI at `http://<your-ip>:1234`
+## Who Should Use This?
+
+**Use easeOS if:**
+- You've been burned by updates that break things
+- You want to actually understand your system
+- You plan to run this for years, not months
+- You value reliability over "move fast and break things"
+
+**Maybe not for you if:**
+- You want to click buttons and never see a terminal
+- You're happy with Docker + Portainer
+- You need ARM support today (coming soon)
 
 ---
 
-## Who is this for?
+## The Technical Bits
 
-**easeOS is perfect for:**
-- 🏠 Families who want to own their photos, not rent cloud storage
-- 🔐 Privacy-conscious users replacing Google/Apple services
-- 🎬 Media enthusiasts building a home streaming server
-- 🏡 Smart home users wanting local-only automation
-- 💻 Developers who want a reproducible home lab
-
-**easeOS might not be for you if:**
-- You need enterprise-grade clustering or HA
-- You prefer managing everything via terminal
-- You're running mission-critical production workloads
-
----
-
-## System Requirements
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| CPU | x86_64, 2 cores | 4+ cores |
-| RAM | 4 GB | 8+ GB |
-| Storage | 32 GB SSD | 256+ GB SSD |
-| Network | Ethernet or WiFi | Gigabit Ethernet |
-
-Works great on: Mini PCs, old laptops, Intel NUCs, Raspberry Pi 5 (coming soon)
-
----
-
-## Documentation
-
-- **[Installation Guide](docs/installation.md)** — Step-by-step setup
-- **[App Store SDK](store/SDK.md)** — Create your own apps
-- **[Configuration Reference](docs/configuration.md)** — All settings explained
-- **[Troubleshooting](docs/troubleshooting.md)** — Common issues and fixes
+| Component | Choice | Why |
+|-----------|--------|-----|
+| Base OS | NixOS 24.11 | Declarative, reproducible, rollback |
+| Filesystem | Btrfs | Snapshots, compression, expansion |
+| Boot | systemd-boot / GRUB | Auto-selected, both work |
+| Encryption | LUKS2 + TPM2 | Modern, hardware-backed |
+| Network | NetworkManager | Just works |
+| Apps | Native NixOS modules | Not containers pretending to be native |
 
 ---
 
 ## Roadmap
 
-- [x] Core OS with NixOS flakes
+- [x] Declarative NixOS base with flakes
 - [x] Web UI for configuration
-- [x] Seed Store for one-click app installs
-- [x] TPM2 encryption support
-- [x] Automated backups
+- [x] Seed Store for app installs
+- [x] TPM2 disk encryption
+- [x] Automated Btrfs backups
 - [ ] Pre-built ISO downloads
-- [ ] ARM64 / Raspberry Pi support
-- [ ] Mobile app for remote access
-- [ ] Tailscale integration
-- [ ] App data migration tools
+- [ ] ARM64 / Raspberry Pi 5
+- [ ] Remote access via Tailscale
+- [ ] System migration wizard
 
 ---
 
 ## Contributing
 
-easeOS is open source and contributions are welcome!
-
-- 🐛 [Report bugs](https://github.com/doughty247/easyos/issues)
-- 💡 [Request features](https://github.com/doughty247/easyos/discussions)
-- 🔧 [Submit pull requests](https://github.com/doughty247/easyos/pulls)
 - 📦 [Create apps for the Seed Store](store/SDK.md)
+- 🐛 [Report issues](https://github.com/doughty247/easyos/issues)
+- 💬 [Discussions](https://github.com/doughty247/easyos/discussions)
 
 ---
 
 ## License
 
-MIT License — see [LICENSE](LICENSE)
+MIT — do what you want.
 
 ---
 
 <p align="center">
-  <strong>Take back your data. Own your cloud.</strong><br>
-  <a href="https://github.com/doughty247/easyos">GitHub</a> •
-  <a href="https://github.com/doughty247/easyos/discussions">Community</a>
+  <em>Self-hosting that doesn't make you the sysadmin.</em>
 </p>
