@@ -1400,7 +1400,7 @@
                         <!-- Dynamic App Tiles - Only Installed Apps -->
                         <template x-for="app in installedApps" :key="app.id">
                             <div class="app-tile rounded-3xl p-6 shadow-card border border-white/30 transition-all flex flex-col"
-                                 :style="'background: linear-gradient(145deg, ' + (app.colors?.primary || '#22C55E') + ' 0%, ' + (app.colors?.secondary || app.colors?.primary || '#4ADE80') + ' 100%);'"
+                                 :style="'background: ' + getAppGradient(app)"
                                  :class="{
                                      'ring-2 ring-white ring-offset-2': getAppState(app.id) === 'installed',
                                      'ring-2 ring-ease-terracotta ring-offset-2 pending-pulse': getAppState(app.id) === 'pending'
@@ -1408,8 +1408,7 @@
                                 
                                 <div class="flex justify-between items-start mb-4">
                                     <!-- App Icon with fallback -->
-                                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center p-2.5 shadow-lg"
-                                         :style="'background: ' + (app.colors?.gradient || 'linear-gradient(135deg, ' + (app.colors?.primary || '#22C55E') + ' 0%, ' + (app.colors?.secondary || '#4ADE80') + ' 100%)')">
+                                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center p-2.5 shadow-lg bg-white/20 backdrop-blur-sm">
                                         <div class="w-full h-full" x-html="(app.icon?.svg || app.icon) || defaultAppIcon"></div>
                                     </div>
                                     <span class="text-xs font-bold px-3 py-1 rounded-full"
@@ -1501,7 +1500,7 @@
                     <div x-show="!storeLoading" class="app-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                         <template x-for="app in filteredStoreApps" :key="app.id">
                             <div class="app-tile rounded-3xl p-6 shadow-card border border-white/30 transition-all flex flex-col"
-                                 :style="'background: linear-gradient(145deg, ' + (app.colors?.primary || '#22C55E') + ' 0%, ' + (app.colors?.secondary || app.colors?.primary || '#4ADE80') + ' 100%);'"
+                                 :style="'background: ' + getAppGradient(app)"
                                  :class="{
                                      'ring-2 ring-white ring-offset-2': getAppState(app.id) === 'installed',
                                      'ring-2 ring-ease-terracotta ring-offset-2 pending-pulse': getAppState(app.id) === 'pending'
@@ -1509,8 +1508,7 @@
                                 
                                 <div class="flex justify-between items-start mb-4">
                                     <!-- App Icon with fallback -->
-                                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center p-2.5 shadow-lg"
-                                         :style="'background: ' + (app.colors?.gradient || 'linear-gradient(135deg, ' + (app.colors?.primary || '#22C55E') + ' 0%, ' + (app.colors?.secondary || '#4ADE80') + ' 100%)')">
+                                    <div class="w-14 h-14 rounded-2xl flex items-center justify-center p-2.5 shadow-lg bg-white/20 backdrop-blur-sm">
                                         <div class="w-full h-full" x-html="(app.icon?.svg || app.icon) || defaultAppIcon"></div>
                                     </div>
                                     <div class="flex flex-col items-end gap-1">
@@ -1982,12 +1980,41 @@
                     return this.defaultAppIcon;
                 },
                 
-                // Get gradient style with fallback
+                // Generate Material You style gradient from app ID
                 getAppGradient(app) {
-                    if (app?.colors?.gradient) {
-                        return app.colors.gradient;
+                    if (!app?.id) return 'linear-gradient(135deg, #22C55E 0%, #4ADE80 100%)';
+                    
+                    // Hash the app ID to get consistent colors
+                    let hash = 0;
+                    for (let i = 0; i < app.id.length; i++) {
+                        hash = app.id.charCodeAt(i) + ((hash << 5) - hash);
                     }
-                    return 'linear-gradient(135deg, #22C55E 0%, #4ADE80 100%)';
+                    
+                    // Generate hue from hash (0-360)
+                    const hue1 = Math.abs(hash % 360);
+                    const hue2 = (hue1 + 30) % 360; // Slight shift for gradient
+                    
+                    // Use vibrant saturation and lightness
+                    const sat = 65 + (Math.abs(hash >> 8) % 20); // 65-85%
+                    const light = 45 + (Math.abs(hash >> 16) % 15); // 45-60%
+                    
+                    return `linear-gradient(135deg, hsl(${hue1}, ${sat}%, ${light}%) 0%, hsl(${hue2}, ${sat}%, ${light + 10}%) 100%)`;
+                },
+                
+                // Get primary color from app (for icon background)
+                getAppPrimaryColor(app) {
+                    if (!app?.id) return '#22C55E';
+                    
+                    let hash = 0;
+                    for (let i = 0; i < app.id.length; i++) {
+                        hash = app.id.charCodeAt(i) + ((hash << 5) - hash);
+                    }
+                    
+                    const hue = Math.abs(hash % 360);
+                    const sat = 65 + (Math.abs(hash >> 8) % 20);
+                    const light = 40 + (Math.abs(hash >> 16) % 10);
+                    
+                    return `hsl(${hue}, ${sat}%, ${light}%)`;
                 },
                 
                 updateTimeOfDay() {
