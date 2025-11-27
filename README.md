@@ -1,5 +1,9 @@
 # easeOS
 
+<p align="center">
+  <img src="assets/logo.svg" alt="easeOS mascot" width="120">
+</p>
+
 **The home server that fixes itself.**
 
 Built on NixOS. Your entire system is code. Break something? Roll back in seconds. New hardware? Clone your setup in minutes.

@@ -1,0 +1,47 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Terracotta pot -->
+  <path d="M30 75 L35 92 L65 92 L70 75 Z" fill="#EA580C"/>
+  <path d="M25 70 L75 70 L75 77 L25 77 Z" fill="#C2410C" rx="3"/>
+  <ellipse cx="50" cy="73" rx="25" ry="3" fill="#EA580C"/>
+  
+  <!-- Soil -->
+  <ellipse cx="50" cy="71" rx="20" ry="4" fill="#365314"/>
+  
+  <!-- Haworthia leaves - rosette pattern with translucent tips -->
+  <!-- Back leaves -->
+  <ellipse cx="35" cy="50" rx="8" ry="18" fill="#4ADE80" transform="rotate(-35 35 50)"/>
+  <ellipse cx="35" cy="48" rx="5" ry="8" fill="#86EFAC" opacity="0.7" transform="rotate(-35 35 48)"/>
+  <ellipse cx="65" cy="50" rx="8" ry="18" fill="#4ADE80" transform="rotate(35 65 50)"/>
+  <ellipse cx="65" cy="48" rx="5" ry="8" fill="#86EFAC" opacity="0.7" transform="rotate(35 65 48)"/>
+  
+  <!-- Middle leaves -->
+  <ellipse cx="28" cy="58" rx="7" ry="15" fill="#22C55E" transform="rotate(-55 28 58)"/>
+  <ellipse cx="28" cy="55" rx="4" ry="7" fill="#A7F3D0" opacity="0.8" transform="rotate(-55 28 55)"/>
+  <ellipse cx="72" cy="58" rx="7" ry="15" fill="#22C55E" transform="rotate(55 72 58)"/>
+  <ellipse cx="72" cy="55" rx="4" ry="7" fill="#A7F3D0" opacity="0.8" transform="rotate(55 72 55)"/>
+  
+  <!-- Front center leaves -->
+  <ellipse cx="42" cy="55" rx="9" ry="20" fill="#22C55E" transform="rotate(-15 42 55)"/>
+  <ellipse cx="42" cy="50" rx="5" ry="10" fill="#A7F3D0" opacity="0.8" transform="rotate(-15 42 50)"/>
+  <ellipse cx="58" cy="55" rx="9" ry="20" fill="#22C55E" transform="rotate(15 58 55)"/>
+  <ellipse cx="58" cy="50" rx="5" ry="10" fill="#A7F3D0" opacity="0.8" transform="rotate(15 58 50)"/>
+  
+  <!-- Center leaf -->
+  <ellipse cx="50" cy="52" rx="8" ry="22" fill="#16A34A"/>
+  <ellipse cx="50" cy="45" rx="5" ry="12" fill="#BBF7D0" opacity="0.85"/>
+  
+  <!-- Cute chibi face in center -->
+  <!-- Big sparkly eyes -->
+  <ellipse cx="45" cy="52" rx="3" ry="4" fill="#1a1a1a"/>
+  <ellipse cx="55" cy="52" rx="3" ry="4" fill="#1a1a1a"/>
+  <!-- Eye sparkles -->
+  <circle cx="46" cy="50" r="1.2" fill="white"/>
+  <circle cx="56" cy="50" r="1.2" fill="white"/>
+  <circle cx="44" cy="53" r="0.6" fill="white"/>
+  <circle cx="54" cy="53" r="0.6" fill="white"/>
+  <!-- Rosy cheeks -->
+  <ellipse cx="40" cy="56" rx="2.5" ry="1.5" fill="#FDA4AF" opacity="0.7"/>
+  <ellipse cx="60" cy="56" rx="2.5" ry="1.5" fill="#FDA4AF" opacity="0.7"/>
+  <!-- Happy little smile -->
+  <path d="M47 58 Q50 62 53 58" stroke="#1a1a1a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+</svg>
