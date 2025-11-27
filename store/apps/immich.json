@@ -6,6 +6,7 @@
   "category": "media",
   "author": "immich-app",
   "website": "https://immich.app",
+  "sourceRepo": "immich-app/immich",
   "icon": {
     "type": "gradient",
     "colors": ["#FFFFFF", "#FFFFFF"],

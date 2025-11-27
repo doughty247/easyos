@@ -6,6 +6,7 @@
   "category": "security",
   "author": "dani-garcia",
   "website": "https://github.com/dani-garcia/vaultwarden",
+  "sourceRepo": "dani-garcia/vaultwarden",
   "icon": {
     "type": "gradient",
     "colors": ["#175DDC", "#1A8FE3"],

@@ -6,6 +6,7 @@
   "category": "productivity",
   "author": "Nextcloud GmbH",
   "website": "https://nextcloud.com",
+  "sourceRepo": "nextcloud/server",
   "icon": {
     "type": "gradient",
     "colors": ["#0082C9", "#00639A"],

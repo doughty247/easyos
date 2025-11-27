@@ -6,6 +6,7 @@
   "category": "media",
   "author": "Jellyfin Contributors",
   "website": "https://jellyfin.org",
+  "sourceRepo": "jellyfin/jellyfin",
   "icon": {
     "type": "gradient",
     "colors": ["#00A4DC", "#AA5CC3"],

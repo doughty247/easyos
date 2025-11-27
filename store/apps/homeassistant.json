@@ -6,6 +6,7 @@
   "category": "automation",
   "author": "Home Assistant",
   "website": "https://home-assistant.io",
+  "sourceRepo": "home-assistant/core",
   "icon": {
     "type": "gradient",
     "colors": ["#41BDF5", "#18BCF2"],
