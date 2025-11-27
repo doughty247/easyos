@@ -1611,6 +1611,11 @@
                 storeSelectedCategory: null,
                 storeLoading: false,
                 
+                // Remote store API (for development/testing)
+                // In VM, 10.0.2.2 is the host machine in QEMU user-mode networking
+                // Set to null to use local /api/store/apps
+                remoteStoreUrl: window.location.hostname === 'localhost' ? null : 'http://10.0.2.2:8089',
+                
                 get filteredStoreApps() {
                     let apps = this.storeApps;
                     
@@ -1671,7 +1676,13 @@
                 async loadStoreApps() {
                     this.storeLoading = true;
                     try {
-                        const res = await fetch('/api/store/apps');
+                        // Try remote store first if configured, fallback to local
+                        let storeUrl = '/api/store/apps';
+                        if (this.remoteStoreUrl) {
+                            storeUrl = this.remoteStoreUrl + '/api/store/apps';
+                        }
+                        
+                        const res = await fetch(storeUrl);
                         if (res.ok) {
                             this.storeApps = await res.json();
                             // Extract categories
@@ -1679,6 +1690,18 @@
                         }
                     } catch (e) {
                         console.error('Failed to load store apps:', e);
+                        // If remote failed, try local as fallback
+                        if (this.remoteStoreUrl) {
+                            try {
+                                const localRes = await fetch('/api/store/apps');
+                                if (localRes.ok) {
+                                    this.storeApps = await localRes.json();
+                                    this.storeCategories = [...new Set(this.storeApps.map(a => a.category).filter(Boolean))];
+                                }
+                            } catch (e2) {
+                                console.error('Local store fallback also failed:', e2);
+                            }
+                        }
                     } finally {
                         this.storeLoading = false;
                     }
