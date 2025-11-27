@@ -465,6 +465,62 @@
             color: #f1f5f9 !important;
         }
         
+        /* Night mode - green status card text should be white/light for contrast */
+        .night-mode .bg-gradient-to-br.from-ease-leaf h3,
+        .night-mode .bg-gradient-to-br.from-ease-leaf .text-white\/80 {
+            color: rgba(255, 255, 255, 0.9) !important;
+        }
+        
+        /* Night mode h2 headers */
+        .night-mode h2 {
+            color: #f1f5f9 !important;
+        }
+        
+        /* Night mode labels in settings */
+        .night-mode label {
+            color: #cbd5e1 !important;
+        }
+        
+        /* Night mode select dropdowns */
+        .night-mode select option {
+            background: #1e293b !important;
+            color: #e2e8f0 !important;
+        }
+        
+        /* Night mode number inputs */
+        .night-mode input[type="number"] {
+            background: rgba(30, 41, 59, 0.9) !important;
+            border-color: rgba(71, 85, 105, 0.6) !important;
+            color: #e2e8f0 !important;
+        }
+        
+        /* Night mode checkboxes */
+        .night-mode input[type="checkbox"] {
+            background: rgba(51, 65, 85, 0.8) !important;
+        }
+        
+        /* Night mode details/summary */
+        .night-mode details summary {
+            color: #f1f5f9 !important;
+        }
+        
+        .night-mode details summary p {
+            color: #94a3b8 !important;
+        }
+        
+        /* Night mode card backgrounds in settings */
+        .night-mode .bg-white\/70 {
+            background: rgba(30, 41, 59, 0.85) !important;
+        }
+        
+        /* Night mode icon backgrounds in settings */
+        .night-mode .bg-ease-leaf\/10,
+        .night-mode .bg-blue-500\/10,
+        .night-mode .bg-purple-500\/10,
+        .night-mode .bg-gray-500\/10 {
+            background: rgba(51, 65, 85, 0.6) !important;
+        }
+        
         /* Night mode inputs and form elements */
         .night-mode input[type="text"],
         .night-mode input[type="password"],
@@ -1754,7 +1810,7 @@
                 happyTimer: null,
                 sidebarOpen: false,
                 isMobile: false,
-                timeOfDay: 'day', // 'sunrise', 'day', 'sunset', 'night'
+                timeOfDay: null, // 'sunrise', 'day', 'sunset', 'night' - set by updateTimeOfDay on init
                 manualThemeOverride: null, // null = auto, 'day' or 'night' = manual
                 starsGenerated: false,
                 shootingStarTimer: null,
@@ -1912,17 +1968,25 @@
                 updateTimeOfDay() {
                     // If manual override, use that
                     if (this.manualThemeOverride) {
-                        this.timeOfDay = this.manualThemeOverride === 'night' ? 'night' : 'day';
+                        this.timeOfDay = this.manualThemeOverride === 'night' ? 'night' : 
+                                         this.manualThemeOverride === 'sunrise' ? 'sunrise' :
+                                         this.manualThemeOverride === 'sunset' ? 'sunset' : 'day';
                         if (this.timeOfDay === 'night' && !this.starsGenerated) {
                             this.$nextTick(() => this.generateStars());
                         }
                         return;
                     }
                     
-                    // Auto-detect based on actual time
-                    const hour = new Date().getHours();
+                    // Auto-detect based on actual local time
+                    const now = new Date();
+                    const hour = now.getHours();
                     let newTimeOfDay;
                     
+                    // Time ranges:
+                    // 6-9: sunrise
+                    // 9-17: day  
+                    // 17-20: sunset
+                    // 20-6: night
                     if (hour >= 6 && hour < 9) {
                         newTimeOfDay = 'sunrise';
                     } else if (hour >= 9 && hour < 17) {
@@ -1932,6 +1996,8 @@
                     } else {
                         newTimeOfDay = 'night';
                     }
+                    
+                    console.log(`Time: ${now.toLocaleTimeString()}, Hour: ${hour}, Theme: ${newTimeOfDay}`);
                     
                     if (newTimeOfDay !== this.timeOfDay) {
                         this.timeOfDay = newTimeOfDay;
