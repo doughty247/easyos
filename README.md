@@ -1,4 +1,4 @@
-# easyos
+# easeOS
 
 NixOS-based declarative appliance OS. Configure everything via `/etc/easy/config.json` and apply changes with a single command. A guided installer builds your system from the latest GitHub sources using Nix binary caches.
 
@@ -50,7 +50,7 @@ Edit `/etc/easy/config.json`:
 
 ```json
 {
-  "hostName": "easyos",
+  "hostName": "easeos",
   "timeZone": "UTC",
   "swapMiB": 8192,
   "users": {
@@ -61,7 +61,7 @@ Edit `/etc/easy/config.json`:
   },
   "mode": "first-run",
   "network": {
-    "ssid": "EASY-Setup",
+    "ssid": "easeOS-Setup",
     "wifiChannel": "6",
     "clientIsolation": true
   },

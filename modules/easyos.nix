@@ -11,11 +11,11 @@ let
   adminKeys = if (cfgJSON ? users && cfgJSON.users ? admin && cfgJSON.users.admin ? authorizedKeys)
               then cfgJSON.users.admin.authorizedKeys else [];
   tz = if (cfgJSON ? timeZone) then cfgJSON.timeZone else "UTC";
-  hostName = if (cfgJSON ? hostName) then cfgJSON.hostName else "easyos";
+  hostName = if (cfgJSON ? hostName) then cfgJSON.hostName else "easeos";
   swapSizeMiB = if (cfgJSON ? swapMiB) then cfgJSON.swapMiB else 8192; # 8 GiB default
   firstRun = if (cfgJSON ? mode) then (cfgJSON.mode == "first-run") else true;
 in {
-  options.easyos.enable = lib.mkEnableOption "Enable EASYOS base configuration";
+  options.easyos.enable = lib.mkEnableOption "Enable easeOS base configuration";
 
   config = lib.mkIf (config.easyos.enable or true) {
   # Pin the state version for stable option semantics
@@ -120,17 +120,17 @@ in {
       mtr traceroute bind.tools
       btrfs-progs
       nano vim
-      # Help command for EasyOS
+      # Help command for easeOS
       (pkgs.writeShellScriptBin "easy-help" ''
         cat << 'EOF'
 
-EasyOS Quick Reference
+easeOS Quick Reference
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 SYSTEM INFORMATION
     cat /etc/easy/channel               Show update channel (stable/beta/preview)
     cat /etc/easy/config.json           View system configuration
-    systemctl status easyos-*           Check EasyOS service status
+    systemctl status easyos-*           Check easeOS service status
     uname -r                            Show kernel version
     hostnamectl                         Show hostname and system info
 

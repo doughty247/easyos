@@ -132,14 +132,14 @@ fi
 
 clear
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║                      EASYOS Installer                          ║"
+echo "║                      easeOS Installer                          ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
 echo "This installer will:"
 echo "  • Partition and format the target drive (ALL DATA WILL BE LOST)"
-echo "  • Install NixOS with the easyos configuration"
+echo "  • Install NixOS with the easeOS configuration"
 echo "  • Set up Btrfs with compression and subvolumes"
-echo "  • Clone the easyos flake from GitHub"
+echo "  • Clone the easeOS flake from GitHub"
 echo ""
 
 # List available block devices
@@ -179,8 +179,8 @@ while true; do
 done
 
 # Get hostname
-prompt "Hostname for this system [easyos]: " HOSTNAME
-HOSTNAME=${HOSTNAME:-easyos}
+prompt "Hostname for this system [easeos]: " HOSTNAME
+HOSTNAME=${HOSTNAME:-easeos}
 
 # Get admin username
 prompt "Admin username [easyadmin]: " ADMIN
@@ -223,8 +223,8 @@ ADMIN_HASH=$(openssl passwd -6 "${ADMIN_PASS}")
 ROOT_HASH=$(openssl passwd -6 "${ROOT_PASS}")
 # Safety net to avoid post-install lockout
 if [ -z "${ADMIN_HASH}" ] || [ -z "${ROOT_HASH}" ]; then
-  echo "WARNING: Password hashing failed; defaulting admin/root password to 'easyos'."
-  ADMIN_HASH=$(openssl passwd -6 "easyos")
+  echo "WARNING: Password hashing failed; defaulting admin/root password to 'easeos'."
+  ADMIN_HASH=$(openssl passwd -6 "easeos")
   ROOT_HASH="$ADMIN_HASH"
 fi
 
@@ -653,7 +653,7 @@ EOR
 
   cat > /mnt/etc/systemd/system/easyos-tpm-reenroll.service <<'EOSVC'
 [Unit]
-Description=EASYOS: Re-enroll LUKS TPM2 token on first boot
+Description=easeOS: Re-enroll LUKS TPM2 token on first boot
 After=local-fs.target
 ConditionPathExists=/etc/easy/recovery.key
 ConditionPathExists=!/etc/easy/tpm-reenroll.done

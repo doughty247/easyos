@@ -1,5 +1,5 @@
 {
-  "hostName": "easyos",
+  "hostName": "easeos",
   "timeZone": "UTC",
   "swapMiB": 4096,
   "users": {
@@ -14,7 +14,7 @@
   "mode": "first-run",
   "network": {
     "interface": "wlan0",
-    "ssid": "EASY-Setup",
+    "ssid": "easeOS-Setup",
     "psk": "changeme-strong-pass",
     "hotspotSubnet": "10.42.0.0/24",
     "hotspotIP": "10.42.0.1",

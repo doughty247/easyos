@@ -6,7 +6,7 @@ let
 
   mode = if (cfgJSON ? mode) then cfgJSON.mode else "first-run";
   netCfg = if (cfgJSON ? network) then cfgJSON.network else {};
-  ssid = if (netCfg ? ssid) then netCfg.ssid else "EASY-Setup";
+  ssid = if (netCfg ? ssid) then netCfg.ssid else "easeOS-Setup";
   psk  = if (netCfg ? psk) then netCfg.psk else "changeme-strong-pass";
   
   # Hotspot network configuration
@@ -60,7 +60,7 @@ in {
     # when we detect actual WiFi hardware. This prevents errors when hardware doesn't exist.
 
     systemd.services.easyos-hotspot = {
-      description = "EASYOS Wi-Fi Hotspot Activator";
+      description = "easeOS Wi-Fi Hotspot Activator";
       wantedBy = [ "multi-user.target" ];
       after = [ "NetworkManager.service" ];
       wants = [ "NetworkManager.service" ];

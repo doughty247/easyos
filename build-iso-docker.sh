@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$SCRIPT_DIR"
 
-# EASYOS ISO Builder (Docker/Podman version)
+# easeOS ISO Builder (Docker/Podman version)
 # For use on Bazzite or other non-NixOS systems
 
 # Parse arguments
@@ -65,7 +65,7 @@ for arg in "$@"; do
   esac
 done
 
-echo "Building easyos ISO with Docker..."
+echo "Building easeOS ISO with Docker..."
 echo "==================================="
 echo ""
 

@@ -1,5 +1,5 @@
 {
-  description = "easyos - NixOS-based EASY appliance (ISO builder & configs)";
+  description = "easeOS - NixOS-based appliance OS (ISO builder & configs)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
@@ -155,7 +155,7 @@
               (writeShellScriptBin "easy-help" ''
                 cat << 'EOF'
 
-EasyOS Installer - Quick Reference
+easeOS Installer - Quick Reference
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 GETTING STARTED
@@ -195,7 +195,7 @@ DOCUMENTATION
 
 POST-INSTALL FEATURES
   • Open Wi‑Fi hotspot (no WPA) with captive portal
-    - SSID: EASY-Setup (always visible, no hidden SSID)
+    - SSID: easeOS-Setup (always visible, no hidden SSID)
     - Captive portal: http://10.42.0.1:1234 (single client)
     - Walled garden: No WAN access by default (set hotspotAllowWAN: true to enable)
     - Client isolation: Prevents hotspot clients from seeing each other
@@ -221,7 +221,7 @@ EOF
             programs.bash.interactiveShellInit = ''
               # Show helpful tip on login
               echo ""
-              echo "Welcome to EasyOS! Type 'easy-help' for quick commands and documentation."
+              echo "Welcome to easeOS! Type 'easy-help' for quick commands and documentation."
               echo ""
 
               # Only run once per boot
