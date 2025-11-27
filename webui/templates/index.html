@@ -1133,7 +1133,7 @@
            :class="{ 'open': sidebarOpen }">
         <!-- Same content as desktop sidebar -->
         <div class="flex items-center justify-center gap-3 mb-8 px-2">
-            <div class="w-12 h-12 relative cursor-watering-can"
+            <div class="w-12 h-12 relative cursor-watering-can bg-white rounded-2xl shadow-md p-1"
                  :class="{ 'plant-happy': isHappy, 'plant-sway': !isHappy }"
                  @touchstart="startWatering()"
                  @touchend="stopWatering()">
@@ -1226,7 +1226,7 @@
             
             <!-- Logo -->
             <div class="flex items-center justify-center gap-3 mb-10 px-2">
-                <div class="w-14 h-14 relative cursor-watering-can"
+                <div class="w-14 h-14 relative cursor-watering-can bg-white rounded-2xl shadow-md p-1"
                      :class="{ 'plant-happy': isHappy, 'plant-sway': !isHappy }"
                      @mousedown="startWatering()"
                      @mouseup="stopWatering()"
