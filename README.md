@@ -16,6 +16,14 @@ Install it once. Add your apps. Stop worrying about it. Updates won't break thin
 
 ---
 
+<p align="center">
+  <img src="screenshots/home-day.png" alt="Home view" width="280">
+  <img src="screenshots/garden-sunset.png" alt="Garden view" width="280">
+  <img src="screenshots/store-night.png" alt="Seed Store" width="280">
+</p>
+
+---
+
 ## What You Get
 
 - **Web UI** at `http://<ip>:1234` — install apps, change settings, no terminal needed
