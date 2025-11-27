@@ -20,10 +20,10 @@ Most self-hosting solutions give you a dashboard on top of Docker and call it a 
 
 **CasaOS, Umbrel, TrueNAS Scale, Unraid** — they all solve the "make Docker pretty" problem. But:
 
-- 🔥 Update breaks something? Hope you have backups.
-- 🤷 New server? Reinstall everything manually.
-- 🕵️ What changed since last week? No idea.
-- 📦 Mix of Docker + native apps? Good luck.
+- Update breaks something? Hope you have backups.
+- New server? Reinstall everything manually.
+- What changed since last week? No idea.
+- Mix of Docker + native apps? Good luck.
 
 These tools are **wrappers**, not operating systems. They can't protect you from themselves.
 
@@ -31,7 +31,7 @@ These tools are **wrappers**, not operating systems. They can't protect you from
 
 ## How easeOS is Different
 
-### 🧬 Declarative, Not Imperative
+### Declarative, Not Imperative
 
 Your entire system — OS, apps, configs — is defined in one place. This isn't a gimmick:
 
@@ -42,7 +42,7 @@ easeOS:      "The system has apps A and B with these configs." (done)
 
 The system figures out how to get there. Every time. Reproducibly.
 
-### ⏪ Atomic Updates with Rollback
+### Atomic Updates with Rollback
 
 Every change creates a new system generation. The old one stays bootable.
 
@@ -55,7 +55,7 @@ sudo nixos-rebuild switch --rollback
 
 No snapshots to manage. No backup/restore dance. Just... undo.
 
-### 🔧 Repair, Don't Reinstall
+### Repair, Don't Reinstall
 
 Corrupted config? Weird state? Just rebuild:
 
@@ -65,7 +65,7 @@ sudo nixos-rebuild switch --impure --flake /etc/nixos/easyos#easyos
 
 The system converges to the declared state. Every file, every service, every permission — rebuilt exactly as specified. This is what "infrastructure as code" actually means.
 
-### 📋 Clone Your Entire Server
+### Clone Your Entire Server
 
 Moving to new hardware? Your system is a ~50KB flake:
 
