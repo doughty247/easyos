@@ -52,6 +52,8 @@ Boot → follow installer → access `http://<ip>:1234`
 
 x86_64, 4GB+ RAM, 32GB+ SSD. Works on mini PCs, old laptops, NUCs.
 
+**Want to try it first?** The ISO boots in QEMU or VirtualBox — no hardware needed.
+
 ---
 
 ## Roadmap
