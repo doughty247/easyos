@@ -6,7 +6,7 @@
 
 **A home server you can set and forget.**
 
-Install it once. Add your apps. Stop worrying about it. Updates won't break things. If something goes wrong, undo it from the boot menu.
+Install it once. Add your apps. Stop worrying about it. If something breaks, easeOS notices and fixes it. If an update goes wrong, it rolls back automatically.
 
 <p align="center">
   <img src="https://img.shields.io/badge/NixOS_24.11-5277C3?style=flat-square&logo=nixos" alt="NixOS 24.11">
@@ -24,22 +24,50 @@ Install it once. Add your apps. Stop worrying about it. Updates won't break thin
 
 ---
 
-## What You Get
+## The Garden Philosophy
 
-- **Web UI** at `http://<ip>:1234` — install apps, change settings, no terminal needed
-- **Seed Store** — one-click installs: Immich, Nextcloud, Home Assistant, Jellyfin, Vaultwarden
-- **Undo button** — every update is reversible from the boot menu
-- **Encrypted by default** — full disk, auto-unlocks on your hardware
-- **Automatic backups** — just plug in a drive
-- **WiFi setup** — boots into hotspot, walks you through config
+- **Drought Resistant** — Your data stays local. When the internet goes down, you keep working.
+- **Self-Healing** — Corrupted file? easeOS fixes it automatically from a snapshot.
+- **Transparent** — Open source, observable, yours.
 
 ---
 
-## Why Not CasaOS/Umbrel/Unraid?
+## The Garden UI
 
-They make Docker pretty. But when an update breaks something, you're restoring backups and crossing your fingers.
+No terminal required. Everything happens through the web interface at `http://<ip>:1234`.
 
-easeOS lets you undo. Pick a previous version from the boot menu and you're back. No restore, no downtime, no stress.
+- **Home** — System vitals at a glance. Status, uptime, pending changes.
+- **Garden** — Your planted apps. Toggle what's growing, click **Apply** to cultivate.
+- **Seed Store** — One-click installs: Immich (photos), Nextcloud (files), Jellyfin (media), Home Assistant, Vaultwarden.
+- **Settings** — Network, hostname, users. Change it here, easeOS rebuilds itself.
+
+---
+
+## The Undo Button
+
+Every change easeOS makes is reversible.
+
+- **Auto-Rollback** — If an update breaks something, easeOS notices and reverts it. You get a notification, not a problem.
+- **One-Click Undo** — After every Apply, a toast appears: *"Changes applied. [Undo]"*. Changed your mind? One click, done.
+
+No restore process. No downtime. No stress.
+
+---
+
+## Why Not Docker / CasaOS / Umbrel?
+
+They make containers pretty. But when an update breaks something, you're restoring backups and crossing your fingers.
+
+easeOS is different. Built on NixOS, every change is atomic and reversible. Pick a previous state and you're back—instantly.
+
+---
+
+## What Powers It
+
+- **NixOS** — Declarative, reproducible, atomic updates
+- **Btrfs** — Self-healing filesystem with snapshots
+- **TPM2** — Hardware-bound encryption, auto-unlocks on your device only
+- **Tailscale** (coming soon) — Secure remote access without port forwarding
 
 ---
 
@@ -48,25 +76,29 @@ easeOS lets you undo. Pick a previous version from the boot menu and you're back
 ```bash
 git clone https://github.com/doughty247/easyos.git
 cd easyos/easyos
-./build-iso-docker.sh --vm      # test in VM
+./build-iso-docker.sh --vm      # test in QEMU
 ./build-iso-docker.sh --ventoy  # or copy to USB
 ```
 
-Boot → follow installer → access `http://<ip>:1234`
-
----
-
-## Requirements
-
-x86_64, 4GB+ RAM, 32GB+ SSD. Works on mini PCs, old laptops, NUCs.
+Works on any x86_64 hardware: mini PCs, old laptops, NUCs.
 
 ---
 
 ## Roadmap
 
-Done: Web UI, Seed Store, encryption, backups
+**Done:** Web UI, Seed Store, encryption, backups, self-healing
 
-Next: Pre-built ISOs, ARM64/Pi 5, Tailscale
+**Next:** ARM64/Pi 5, pre-built ISOs, Tailscale
+
+---
+
+## What's Next: Meet Cooper
+
+We're building **Cooper**—a beautiful hardware companion for easeOS. A glowing *Haworthia cooperi* succulent that sits on your desk and shows your server's health at a glance. Green means healthy. Red means it needs attention.
+
+No screen, no app, no checking. Just a plant that glows.
+
+*Interested? [Join the waitlist →](https://github.com/doughty247/easyos/discussions)*
 
 ---
 
