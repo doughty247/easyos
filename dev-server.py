@@ -63,9 +63,15 @@ class DevHandler(SimpleHTTPRequestHandler):
             
         elif p == '/api/status':
             self._set_headers()
+            # DEV MODE: Set to True to test Greenhouse UI
+            greenhouse_mode = True  # os.path.exists('/run/easyos-greenhouse-active')
             self.wfile.write(json.dumps({
                 'active': 'inactive',
-                'log': '[DEV MODE] No actual system operations\n'
+                'log': '[DEV MODE] No actual system operations\n',
+                'greenhouseMode': greenhouse_mode,
+                'greenhouseSSID': 'easeOS-Greenhouse' if greenhouse_mode else None,
+                'greenhousePassword': 'greenhouse123' if greenhouse_mode else None,
+                'connectedDevices': 3 if greenhouse_mode else 0
             }).encode())
             
         elif p == '/api/store/apps':

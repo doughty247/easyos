@@ -7,6 +7,7 @@ let
   mode = if (cfgJSON ? mode) then cfgJSON.mode else "first-run";
   netCfg = if (cfgJSON ? network) then cfgJSON.network else {};
   ssid = if (netCfg ? ssid) then netCfg.ssid else "easeOS-Setup";
+  greenhouseSSID = if (netCfg ? greenhouseSSID) then netCfg.greenhouseSSID else "easeOS-Greenhouse";
   psk  = if (netCfg ? psk) then netCfg.psk else "changeme-strong-pass";
   
   # Hotspot network configuration
@@ -16,6 +17,12 @@ let
   hotspotDHCPEnd = if (netCfg ? hotspotDHCPEnd) then netCfg.hotspotDHCPEnd else "10.42.0.250";
   wifiChannel = if (netCfg ? wifiChannel) then netCfg.wifiChannel else "6";
   clientIsolation = if (netCfg ? clientIsolation) then netCfg.clientIsolation else true;
+  
+  # Greenhouse mode configuration (emergency hotspot when internet goes down)
+  greenhouseEnabled = if (netCfg ? greenhouseEnabled) then netCfg.greenhouseEnabled else true;  # Auto-Greenhouse on by default
+  greenhouseCheckInterval = if (netCfg ? greenhouseCheckInterval) then netCfg.greenhouseCheckInterval else 30;  # seconds between checks
+  greenhouseFailThreshold = if (netCfg ? greenhouseFailThreshold) then netCfg.greenhouseFailThreshold else 3;  # failures before Greenhouse
+  greenhouseCheckHost = if (netCfg ? greenhouseCheckHost) then netCfg.greenhouseCheckHost else "1.1.1.1";  # ping target
   
   # QoS configuration (CAKE algorithm for bufferbloat control)
   qosEnabled = if (netCfg ? qosEnabled) then netCfg.qosEnabled else true;
@@ -27,7 +34,8 @@ let
   # Walled garden: disable WAN access from hotspot clients unless enabled
   allowHotspotWAN = if (netCfg ? hotspotAllowWAN) then netCfg.hotspotAllowWAN else false;
 
-  hotspotEnabled = (mode == "first-run") || (mode == "guest");
+  # Hotspot activates for: first-run, guest, OR greenhouse mode
+  hotspotEnabled = (mode == "first-run") || (mode == "guest") || (mode == "greenhouse");
   captivePort = 1234;
 in {
   options.easyos.hotspot.enable = lib.mkOption {
@@ -269,5 +277,121 @@ in {
       iproute2
       iw  # For WiFi power management control
     ];
-  }) ];
+  })
+  
+  # Greenhouse Mode Watchdog - monitors internet and triggers emergency hotspot
+  (lib.mkIf (config.easyos.hotspot.enable && greenhouseEnabled && mode == "normal") {
+    systemd.services.easyos-greenhouse-watchdog = {
+      description = "easeOS Greenhouse Mode - Internet Connectivity Monitor";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      
+      unitConfig = {
+        ConditionPathExists = [ "/etc/easy/installed" ];
+      };
+      
+      serviceConfig = {
+        Type = "simple";
+        Restart = "always";
+        RestartSec = "10";
+      };
+      
+      path = with pkgs; [ coreutils gnugrep jq curl ];
+      
+      script = ''
+        FAIL_COUNT=0
+        GREENHOUSE_ACTIVE=false
+        CONFIG_FILE="/etc/easy/config.json"
+        GREENHOUSE_STATE_FILE="/run/easyos-greenhouse-active"
+        
+        echo "Greenhouse Watchdog started - monitoring connectivity to ${greenhouseCheckHost}"
+        
+        while true; do
+          # Check internet connectivity
+          if ${pkgs.iputils}/bin/ping -c 1 -W 5 ${greenhouseCheckHost} > /dev/null 2>&1; then
+            # Internet is up
+            if [ "$GREENHOUSE_ACTIVE" = "true" ]; then
+              echo "Internet restored - deactivating Greenhouse"
+              
+              # Restore normal mode in config
+              if [ -f "$CONFIG_FILE" ]; then
+                ${pkgs.jq}/bin/jq '.mode = "normal"' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+              fi
+              
+              # Signal hotspot to stop
+              rm -f "$GREENHOUSE_STATE_FILE"
+              GREENHOUSE_ACTIVE=false
+              
+              # Restart hotspot service to deactivate
+              systemctl restart easyos-hotspot.service 2>/dev/null || true
+            fi
+            FAIL_COUNT=0
+          else
+            # Internet is down
+            FAIL_COUNT=$((FAIL_COUNT + 1))
+            echo "Connectivity check failed ($FAIL_COUNT/${toString greenhouseFailThreshold})"
+            
+            if [ "$FAIL_COUNT" -ge ${toString greenhouseFailThreshold} ] && [ "$GREENHOUSE_ACTIVE" = "false" ]; then
+              echo "Internet down - activating Greenhouse mode"
+              
+              # Set Greenhouse mode in config
+              if [ -f "$CONFIG_FILE" ]; then
+                ${pkgs.jq}/bin/jq '.mode = "greenhouse"' "$CONFIG_FILE" > "$CONFIG_FILE.tmp" && mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
+              fi
+              
+              # Create state file with Greenhouse info for UI
+              cat > "$GREENHOUSE_STATE_FILE" << EOF
+{
+  "active": true,
+  "ssid": "${greenhouseSSID}",
+  "ip": "${hotspotIP}",
+  "port": ${toString captivePort},
+  "since": "$(date -Iseconds)"
+}
+EOF
+              
+              GREENHOUSE_ACTIVE=true
+              
+              # Start emergency hotspot
+              ${pkgs.networkmanager}/bin/nmcli connection delete easyos-greenhouse 2>/dev/null || true
+              
+              WIFI_IFACE=$(${pkgs.networkmanager}/bin/nmcli -t -f DEVICE,TYPE device 2>/dev/null | grep ':wifi$' | cut -d: -f1 | head -1 || true)
+              
+              if [ -n "$WIFI_IFACE" ]; then
+                echo "Starting Greenhouse hotspot on $WIFI_IFACE"
+                ${pkgs.networkmanager}/bin/nmcli connection add \
+                  type wifi \
+                  ifname "$WIFI_IFACE" \
+                  con-name easyos-greenhouse \
+                  autoconnect no \
+                  ssid "${greenhouseSSID}" \
+                  802-11-wireless.mode ap \
+                  802-11-wireless.band bg \
+                  802-11-wireless.channel ${wifiChannel} \
+                  ipv4.method shared \
+                  ipv4.addresses ${hotspotIP}/24 \
+                  ipv6.method disabled \
+                  wifi-sec.key-mgmt none
+                
+                ${pkgs.networkmanager}/bin/nmcli connection up easyos-greenhouse || echo "Failed to start Greenhouse hotspot"
+              else
+                echo "No WiFi interface available for Greenhouse hotspot"
+              fi
+            fi
+          fi
+          
+          sleep ${toString greenhouseCheckInterval}
+        done
+      '';
+      
+      preStop = ''
+        # Clean up Greenhouse hotspot on service stop
+        ${pkgs.networkmanager}/bin/nmcli connection down easyos-greenhouse 2>/dev/null || true
+        ${pkgs.networkmanager}/bin/nmcli connection delete easyos-greenhouse 2>/dev/null || true
+        rm -f /run/easyos-greenhouse-active
+      '';
+    };
+  })
+  ];
 }

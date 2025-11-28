@@ -1,0 +1,31 @@
+{
+  "id": "plex",
+  "name": "Plex",
+  "version": "1.0.0",
+  "description": "Stream movies, TV, music, and more. Your personal media server.",
+  "category": "media",
+  "author": "Plex Inc.",
+  "website": "https://plex.tv",
+  "sourceRepo": "plexinc/pms-docker",
+  "icon": {
+    "type": "gradient",
+    "colors": ["#E5A00D", "#CC7B19"],
+    "svg": "<svg viewBox='0 0 24 24' fill='white' xmlns='http://www.w3.org/2000/svg'><path d='M11.643 0H4.68l7.679 12-7.679 12h6.963L19.32 12z'/></svg>"
+  },
+  "colors": {
+    "primary": "#E5A00D",
+    "gradient": "linear-gradient(135deg, #E5A00D 0%, #CC7B19 100%)"
+  },
+  "nixModule": {
+    "services.plex": {
+      "enable": true,
+      "openFirewall": true
+    }
+  },
+  "ports": [32400],
+  "requirements": {
+    "minRAM": "2GB",
+    "storage": "2GB+"
+  },
+  "tags": ["media", "streaming", "movies", "tv", "music", "plex"]
+}

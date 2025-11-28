@@ -5,6 +5,15 @@
     },
     "nextcloud": {
       "enable": false
+    },
+    "vaultwarden": {
+      "enable": true
+    },
+    "jellyfin": {
+      "enable": false
     }
+  },
+  "backup": {
+    "enable": true
   }
 }

@@ -19,9 +19,16 @@
   "nixModule": {
     "services.home-assistant": {
       "enable": true,
-      "openFirewall": true,
-      "config": null
-    }
+      "extraComponents": [
+        "esphome",
+        "met",
+        "radio_browser"
+      ],
+      "config": {
+        "default_config": {}
+      }
+    },
+    "networking.firewall.allowedTCPPorts": [8123]
   },
   "ports": [8123],
   "requirements": {

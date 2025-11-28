@@ -27,7 +27,12 @@
     "qosDownloadMbps": "100",
     "qosUploadMbps": "20",
     "qosAutoDetect": false,
-    "wifiPowerSave": false
+    "wifiPowerSave": false,
+    "greenhouseEnabled": true,
+    "greenhouseSSID": "easeOS-Greenhouse",
+    "greenhouseCheckInterval": 30,
+    "greenhouseFailThreshold": 3,
+    "greenhouseCheckHost": "1.1.1.1"
   },
 
   "backup": {

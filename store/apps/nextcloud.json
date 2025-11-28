@@ -19,8 +19,12 @@
   "nixModule": {
     "services.nextcloud": {
       "enable": true,
+      "package": "pkgs.nextcloud31",
       "hostName": "localhost",
-      "config.adminpassFile": "/etc/easy/secrets/nextcloud-admin"
+      "config": {
+        "adminpassFile": "/etc/easy/secrets/nextcloud-admin",
+        "dbtype": "sqlite"
+      }
     }
   },
   "ports": [80, 443],
