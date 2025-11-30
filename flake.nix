@@ -147,11 +147,38 @@
 
             # Helpful tools for the ISO
             environment.systemPackages = with pkgs; [
-              git parted gptfdisk networkmanager openssl jq
+              git parted gptfdisk networkmanager openssl jq curl
               cryptsetup systemd qrencode w3m
               (writeShellScriptBin "easyos-install" ''
                 # Launch captive portal setup UI
                 echo "Opening easeOS setup wizard..."
+                echo ""
+                
+                # Check and show service status
+                echo "Checking services..."
+                systemctl is-active --quiet easyos-hotspot && echo "  Hotspot: active" || echo "  Hotspot: inactive"
+                systemctl is-active --quiet easyos-webui && echo "  Web UI: active" || echo "  Web UI: inactive"
+                echo ""
+                
+                # Wait for webui to be ready
+                for i in 1 2 3 4 5; do
+                  if systemctl is-active --quiet easyos-webui; then
+                    break
+                  fi
+                  echo "Waiting for Web UI service... ($i/5)"
+                  sleep 2
+                done
+                
+                # Test if the server is responding
+                if curl -s --connect-timeout 2 http://10.42.0.1:1234/api/status >/dev/null 2>&1; then
+                  echo "Web UI server is responding!"
+                else
+                  echo "Warning: Web UI not responding yet. Checking service..."
+                  systemctl status easyos-webui --no-pager -l 2>&1 | head -20
+                  echo ""
+                  echo "Trying anyway..."
+                fi
+                
                 echo ""
                 echo "If the browser doesn't open automatically, visit:"
                 echo "  http://10.42.0.1:1234"
@@ -246,7 +273,28 @@ EOF
                 
                 if [ "''${HOTSPOT_ACTIVE}" -ge 1 ]; then
                   echo ""
-                  echo "Setup hotspot active! Opening captive portal..."
+                  echo "Setup hotspot active! Checking Web UI service..."
+                  
+                  # Wait for webui service to be ready
+                  for i in 1 2 3 4 5; do
+                    if systemctl is-active --quiet easyos-webui 2>/dev/null; then
+                      echo "Web UI service is running."
+                      break
+                    fi
+                    echo "Waiting for Web UI... ($i/5)"
+                    sleep 2
+                  done
+                  
+                  # Check if it's actually responding
+                  if curl -s --connect-timeout 2 http://10.42.0.1:1234/api/status >/dev/null 2>&1; then
+                    echo "Web UI is responding!"
+                  else
+                    echo ""
+                    echo "Web UI not responding. Service status:"
+                    systemctl status easyos-webui --no-pager 2>&1 | head -15 || true
+                    echo ""
+                  fi
+                  
                   echo ""
                   
                   # Auto-launch the captive portal in a text browser
