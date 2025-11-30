@@ -247,29 +247,8 @@ EOF
               if [ ! -f /tmp/easyos-setup-run ]; then
                 touch /tmp/easyos-setup-run
 
-                # Enable WiFi if no ethernet connected
-                ETH_CONNECTED=$(nmcli -t -f TYPE,STATE device 2>/dev/null | grep -c '^ethernet:connected$' || true)
-
-                if [ "''${ETH_CONNECTED}" -ge 1 ]; then
-                  echo "✓ Ethernet connection detected"
-                  nmcli radio wifi off 2>/dev/null || true
-                else
-                  echo "No ethernet detected - enabling WiFi for setup hotspot..."
-                  if [ -f /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf ]; then
-                    sudo mv /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf \
-                       /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf.disabled 2>/dev/null || true
-                    sudo systemctl reload NetworkManager 2>/dev/null || true
-                  fi
-                  nmcli radio wifi on 2>/dev/null || true
-                fi
-
-                # Wait for hotspot service to initialize
-                echo ""
-                echo "Starting setup hotspot..."
-                sleep 3
-                
-                # Check if hotspot is running
-                HOTSPOT_ACTIVE=$(nmcli -t connection show --active 2>/dev/null | grep -c "easeOS-Setup" || true)
+                # Check if hotspot is already running (set up by easyos-hotspot.service)
+                HOTSPOT_ACTIVE=$(nmcli -t connection show --active 2>/dev/null | grep -c "easyos-hotspot" || true)
                 
                 if [ "''${HOTSPOT_ACTIVE}" -ge 1 ]; then
                   echo ""
