@@ -610,15 +610,15 @@ let
   storeApps = if builtins.pathExists storeAppsDir then
     builtins.attrNames (builtins.readDir storeAppsDir)
   else [];
+
+  # Python with cryptography for AES-256-GCM encryption
+  pythonWithCrypto = pkgs.python3.withPackages (ps: [ ps.cryptography ]);
 in {
   options.easyos.webui.enable = lib.mkOption {
     type = lib.types.bool;
     default = true;
     description = "Enable built-in web UI for editing /etc/easy/config.json and applying changes.";
   };
-
-  # Python with cryptography for AES-256-GCM encryption
-  pythonWithCrypto = pkgs.python3.withPackages (ps: [ ps.cryptography ]);
 
   config = lib.mkIf cfg.enable {
     # Use a tiny Python stdlib server for API + static; replace nginx placeholder
