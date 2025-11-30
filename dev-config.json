@@ -1,5 +1,5 @@
 {
-  "mode": "first-run",
+  "mode": "normal",
   "apps": {
     "immich": {
       "enable": false
@@ -21,9 +21,8 @@
     "enable": true
   },
   "admin": {
-    "username": "erhwehwe5hw",
-    "hostname": "sreaer",
-    "passwordHash": "[DEV_MODE_HASH]",
+    "username": "elijah",
+    "hostname": "Eden",
     "created": true
   },
   "install": {
@@ -35,5 +34,6 @@
     "wifi_ssid": "",
     "started": true,
     "startedAt": "2025-11-30T03:24:50"
-  }
+  },
+  "hostName": "Eden"
 }
