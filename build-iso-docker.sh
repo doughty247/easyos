@@ -12,12 +12,14 @@ cd "$SCRIPT_DIR"
 VENTOY_COPY=false
 VM_TEST=false
 VM_UPDATE=false
-FORCE_BUILD=false
+FORCE_BUILD=true      # Default: always rebuild fresh
 PRUNE_VOLUMES=false
 SUPPRESS_XATTR_WARNINGS=true  # Default to suppressing xattr warnings (they're harmless but slow)
 EXPORT_ARTIFACTS=true
 ARTIFACTS_DIR="iso-output/_artifacts"
 NON_INTERACTIVE=false
+
+CLEAN_VOLUMES=true    # Default: clean cached volumes for fresh build
 
 for arg in "$@"; do
   case $arg in
@@ -32,6 +34,12 @@ for arg in "$@"; do
       ;;
     --force|--rebuild)
       FORCE_BUILD=true
+      ;;
+    --no-clean)
+      CLEAN_VOLUMES=false
+      ;;
+    --no-force|--incremental)
+      FORCE_BUILD=false
       ;;
     --prune-volumes)
       PRUNE_VOLUMES=true
@@ -50,11 +58,12 @@ for arg in "$@"; do
       NON_INTERACTIVE=true
       ;;
     *)
-      echo "Usage: $0 [--ventoy] [--vm] [--update-vm] [--force] [--prune-volumes] [--no-xattr-warnings] [--non-interactive]"
-      echo "  --ventoy  Auto-copy ISO to Ventoy USB drive"
-      echo "  --vm      Launch ISO in QEMU VM for testing (fresh install)"
-      echo "  --update-vm  Boot existing VM disk and auto-update with latest flake"
-      echo "  --force   Force a rebuild even if the ISO appears up-to-date"
+      echo "Usage: $0 [--ventoy] [--vm] [--update-vm] [--no-force] [--no-clean] [--prune-volumes] [--non-interactive]"
+      echo "  --ventoy       Auto-copy ISO to Ventoy USB drive"
+      echo "  --vm           Launch ISO in QEMU VM for testing (fresh install)"
+      echo "  --update-vm    Boot existing VM disk and auto-update with latest flake"
+      echo "  --no-force     Use cached build if workspace unchanged (faster for iterating)"
+      echo "  --no-clean     Keep cached Docker volumes (faster but may cause stale cache issues)"
       echo "  --prune-volumes  Remove stale easyos-nix-* volumes to reclaim space"
       echo "  --no-xattr-warnings  Hide harmless lgetxattr/read_attrs warnings from build logs"
       echo "  --no-artifacts       Skip exporting helper artifacts for inspection"
@@ -88,9 +97,9 @@ fi
 echo "Using: $DOCKER_CMD"
 echo ""
 
-# Prune stale easyos-nix-* volumes if requested or on --force
-if [ "$PRUNE_VOLUMES" = true ] || [ "$FORCE_BUILD" = true ]; then
-  echo "Cleaning up for fresh build..."
+# Clean cached volumes if requested (default: true for fresh builds)
+if [ "$CLEAN_VOLUMES" = true ] || [ "$PRUNE_VOLUMES" = true ]; then
+  echo "Cleaning cached Docker volumes..."
   
   # Remove stale containers using easyos volumes
   STALE_CONTAINERS=$($DOCKER_CMD ps -a --filter "ancestor=nixos/nix:latest" -q 2>/dev/null || true)
@@ -121,7 +130,6 @@ if [ "$PRUNE_VOLUMES" = true ] || [ "$FORCE_BUILD" = true ]; then
     rm -f /tmp/easyos-test.img /tmp/OVMF_VARS.easyos*.fd 2>/dev/null || true
   fi
   
-  echo "✓ Cleanup complete"
   echo ""
 fi
 
@@ -244,11 +252,8 @@ if [ -n "$EXISTING_ISO" ]; then
     fi
   fi
 else
-  echo "No existing ISO found. Building..."
-fi
-
-if [ "$FORCE_BUILD" = true ] && [ "$EXISTING_ISO" = "" ]; then
-  echo "Force flag provided but no ISO exists yet; proceeding with full build."
+  # No ISO exists - just say we're creating one
+  echo "Creating ISO..."
 fi
 
 # If --vm is requested and an ISO exists, only skip build when the workspace hash
