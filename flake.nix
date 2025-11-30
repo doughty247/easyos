@@ -97,6 +97,9 @@
             isoImage.makeEfiBootable = true;
             isoImage.makeUsbBootable = true;
             isoImage.volumeID = "EASYOS-${lib.toUpper chanConfig.channelName}";
+            
+            # Fast boot - 1 second timeout for installer
+            boot.loader.timeout = lib.mkForce 1;
 
             # Ship channel marker
             environment.etc."easy/channel".text = chanConfig.channelName;
@@ -151,8 +154,31 @@
             # Helpful tools for the ISO
             environment.systemPackages = with pkgs; [
               git parted gptfdisk networkmanager openssl jq
-              cryptsetup systemd qrencode
+              cryptsetup systemd qrencode w3m
               (writeShellScriptBin "easyos-install" ''
+                # Launch captive portal setup UI
+                echo "Opening easeOS setup wizard..."
+                echo ""
+                echo "If the browser doesn't open automatically, visit:"
+                echo "  http://10.42.0.1:1234"
+                echo ""
+                echo "Or from another device, connect to WiFi 'easeOS-Setup' and open the URL above."
+                echo ""
+                echo "For legacy CLI installer, run: sudo /etc/easyos-install.sh"
+                
+                # Try to open in a browser if available
+                if command -v xdg-open &>/dev/null; then
+                  xdg-open "http://10.42.0.1:1234" 2>/dev/null &
+                elif command -v w3m &>/dev/null; then
+                  w3m "http://10.42.0.1:1234"
+                elif command -v lynx &>/dev/null; then
+                  lynx "http://10.42.0.1:1234"
+                else
+                  echo "No browser available. Please open http://10.42.0.1:1234 on another device."
+                fi
+              '')
+              # Keep legacy CLI installer available as separate command
+              (writeShellScriptBin "easyos-install-cli" ''
                 exec /etc/easyos-install.sh "$@"
               '')
               (writeShellScriptBin "easy-help" ''
@@ -161,21 +187,25 @@
 easeOS Setup - Quick Reference
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🌱 WEB-BASED SETUP (RECOMMENDED)
+WEB-BASED SETUP (RECOMMENDED)
+    The setup wizard opens automatically on boot.
+    Or run: easyos-install
+
+    From another device:
     1. Connect to WiFi: "easeOS-Setup" (open, no password)
     2. Open browser: http://10.42.0.1:1234
     3. Follow the setup wizard to install easeOS
 
-💻 CLI INSTALLER (ALTERNATIVE)
-    sudo easyos-install               Launch CLI installer
+CLI INSTALLER (ALTERNATIVE)
+    sudo easyos-install-cli           Launch CLI installer
     sudo nmtui                        Configure network first
 
 INSTALLER FEATURES
-    • Guided web wizard OR traditional CLI
-    • Automatic disk partitioning with Btrfs
-    • Optional TPM2-backed LUKS encryption
-    • QR code display for recovery keys
-    • Update channel selection (stable/beta/preview)
+    ✓ Guided web wizard OR traditional CLI
+    ✓ Automatic disk partitioning with Btrfs
+    ✓ Optional TPM2-backed LUKS encryption
+    ✓ QR code display for recovery keys
+    ✓ Update channel selection (stable/beta/preview)
 
 SYSTEM INFORMATION
     lsblk                               List block devices
@@ -243,33 +273,46 @@ EOF
                 
                 if [ "''${HOTSPOT_ACTIVE}" -ge 1 ]; then
                   echo ""
-                  echo "╔══════════════════════════════════════════════════════════════════╗"
-                  echo "║                    🌱 easeOS Setup Ready! 🌱                      ║"
-                  echo "╠══════════════════════════════════════════════════════════════════╣"
-                  echo "║                                                                   ║"
-                  echo "║  Connect to the Wi-Fi hotspot:                                   ║"
-                  echo "║    📶 SSID: easeOS-Setup (open, no password)                     ║"
-                  echo "║                                                                   ║"
-                  echo "║  Then open your browser to complete setup:                        ║"
-                  echo "║    🌐 http://10.42.0.1:1234                                       ║"
-                  echo "║                                                                   ║"
-                  echo "║  Or use the legacy CLI installer:                                 ║"
-                  echo "║    💻 sudo easyos-install                                         ║"
-                  echo "║                                                                   ║"
-                  echo "╚══════════════════════════════════════════════════════════════════╝"
+                  echo "Setup hotspot active! Opening captive portal..."
                   echo ""
+                  
+                  # Auto-launch the captive portal in a text browser
+                  # This provides immediate visual feedback and interactive setup
+                  if command -v w3m &>/dev/null; then
+                    echo "Launching setup wizard in w3m browser..."
+                    echo "(Press 'q' to exit browser, then type 'easyos-install' to relaunch)"
+                    sleep 2
+                    w3m http://10.42.0.1:1234
+                  else
+                    # Fallback to showing info if no text browser
+                    echo "╔══════════════════════════════════════════════════════════════════╗"
+                    echo "║                    easeOS Setup Ready!                            ║"
+                    echo "╠══════════════════════════════════════════════════════════════════╣"
+                    echo "║                                                                   ║"
+                    echo "║  Connect to the Wi-Fi hotspot from another device:               ║"
+                    echo "║    SSID: easeOS-Setup (open, no password)                        ║"
+                    echo "║                                                                   ║"
+                    echo "║  Then open your browser to complete setup:                        ║"
+                    echo "║    http://10.42.0.1:1234                                          ║"
+                    echo "║                                                                   ║"
+                    echo "║  Or use the CLI installer:                                        ║"
+                    echo "║    sudo easyos-install-cli                                        ║"
+                    echo "║                                                                   ║"
+                    echo "╚══════════════════════════════════════════════════════════════════╝"
+                    echo ""
+                  fi
                 else
                   # No hotspot (maybe no WiFi hardware) - offer CLI installer
                   echo ""
                   echo "╔══════════════════════════════════════════════════════════════════╗"
-                  echo "║                    🌱 easeOS Setup 🌱                             ║"
+                  echo "║                        easeOS Setup                               ║"
                   echo "╠══════════════════════════════════════════════════════════════════╣"
                   echo "║                                                                   ║"
                   echo "║  No Wi-Fi hotspot available. Use the CLI installer:              ║"
-                  echo "║    💻 sudo easyos-install                                         ║"
+                  echo "║    sudo easyos-install-cli                                        ║"
                   echo "║                                                                   ║"
                   echo "║  Or configure network first:                                      ║"
-                  echo "║    📶 sudo nmtui                                                  ║"
+                  echo "║    sudo nmtui                                                     ║"
                   echo "║                                                                   ║"
                   echo "╚══════════════════════════════════════════════════════════════════╝"
                   echo ""
