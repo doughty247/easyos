@@ -129,7 +129,7 @@ let
                         data = json.loads(result.stdout)
                         for device in data.get('blockdevices', []):
                             if device.get('type') == 'disk':
-                                name = device.get('name', '')
+                                name = device.get('name', '''')
                                 # Check if this is a VM virtual disk
                                 if name.startswith('vd'):
                                     is_vm = True
@@ -146,19 +146,19 @@ let
                                     if fstype and fstype not in ['', 'swap']:
                                         has_data = True
                                     partitions.append({
-                                        'name': child.get('name', ''),
-                                        'size': child.get('size', ''),
+                                        'name': child.get('name', ''''),
+                                        'size': child.get('size', ''''),
                                         'fstype': fstype or 'unformatted',
-                                        'mountpoint': mountpoint or ''
+                                        'mountpoint': mountpoint or ''''
                                     })
                                 
                                 drives.append({
                                     'name': name,
                                     'path': f'/dev/{name}',
                                     'size': device.get('size', 'Unknown'),
-                                    'model': device.get('model', '').strip() if device.get('model') else 'Unknown Drive',
-                                    'serial': device.get('serial', ''),
-                                    'transport': device.get('tran', ''),  # sata, nvme, usb, virtio
+                                    'model': device.get('model', '''').strip() if device.get('model') else 'Unknown Drive',
+                                    'serial': device.get('serial', ''''),
+                                    'transport': device.get('tran', ''''),  # sata, nvme, usb, virtio
                                     'hasData': has_data,
                                     'isBlank': len(partitions) == 0,
                                     'partitions': partitions,
@@ -353,14 +353,14 @@ let
                     
                     # Decrypt credentials if encrypted
                     if data.get('encrypted'):
-                        decrypted_json = aes_decrypt(data.get('data', ''), SESSION_KEY)
+                        decrypted_json = aes_decrypt(data.get('data', ''''), SESSION_KEY)
                         credentials = json.loads(decrypted_json)
-                        ssid = credentials.get('ssid', '')
-                        password = credentials.get('password', '')
+                        ssid = credentials.get('ssid', '''')
+                        password = credentials.get('password', '''')
                         print(f"[CRYPTO] Received AES-256-GCM encrypted WiFi credentials")
                     else:
-                        ssid = data.get('ssid', '')
-                        password = data.get('password', '')
+                        ssid = data.get('ssid', '''')
+                        password = data.get('password', '''')
                         print(f"[WARN] Received unencrypted WiFi credentials")
                     
                     if not ssid:
@@ -409,15 +409,15 @@ let
                     
                     # Decrypt if encrypted
                     if data.get('encrypted'):
-                        decrypted_json = aes_decrypt(data.get('data', ''), SESSION_KEY)
+                        decrypted_json = aes_decrypt(data.get('data', ''''), SESSION_KEY)
                         account = json.loads(decrypted_json)
-                        username = account.get('username', '')
-                        password = account.get('password', '')
+                        username = account.get('username', '''')
+                        password = account.get('password', '''')
                         hostname = account.get('hostname', 'easeos')
                         print(f"[CRYPTO] Received AES-256-GCM encrypted account credentials")
                     else:
-                        username = data.get('username', '')
-                        password = data.get('password', '')
+                        username = data.get('username', '''')
+                        password = data.get('password', '''')
                         hostname = data.get('hostname', 'easeos')
                         print(f"[WARN] Received unencrypted account credentials")
                     
@@ -483,9 +483,9 @@ let
                 
                 try:
                     data = json.loads(body or '{}')
-                    target_drive = data.get('drive', '')
+                    target_drive = data.get('drive', '''')
                     encrypt = data.get('encrypt', False)
-                    encryption_password = data.get('encryptionPassword', '')
+                    encryption_password = data.get('encryptionPassword', '''')
                     channel = data.get('channel', 'stable')
                     
                     if not target_drive or not target_drive.startswith('/dev/'):
