@@ -267,6 +267,41 @@ EOF
               # Only run once per boot
               if [ ! -f /tmp/easyos-setup-run ]; then
                 touch /tmp/easyos-setup-run
+                
+                # Show diagnostic information first
+                echo "=== System Diagnostics ==="
+                echo ""
+                echo "Marker files:"
+                ls -la /etc/easy/ 2>&1 || echo "  /etc/easy/ not found!"
+                echo ""
+                
+                echo "Service status:"
+                echo "  easyos-hotspot: $(systemctl is-active easyos-hotspot 2>/dev/null || echo 'not found')"
+                echo "  easyos-webui: $(systemctl is-active easyos-webui 2>/dev/null || echo 'not found')"
+                echo "  NetworkManager: $(systemctl is-active NetworkManager 2>/dev/null || echo 'not found')"
+                echo ""
+                
+                echo "WiFi devices:"
+                nmcli device 2>&1 || echo "  nmcli failed"
+                echo ""
+                
+                echo "Network connections:"
+                nmcli connection show 2>&1 || echo "  no connections"
+                echo ""
+                
+                # If hotspot service failed, show logs
+                if ! systemctl is-active --quiet easyos-hotspot 2>/dev/null; then
+                  echo "=== Hotspot service logs ==="
+                  journalctl -u easyos-hotspot --no-pager -n 30 2>&1 || echo "No logs available"
+                  echo ""
+                fi
+                
+                # If webui service failed, show logs
+                if ! systemctl is-active --quiet easyos-webui 2>/dev/null; then
+                  echo "=== Web UI service logs ==="
+                  journalctl -u easyos-webui --no-pager -n 30 2>&1 || echo "No logs available"
+                  echo ""
+                fi
 
                 # Check if hotspot is already running (set up by easyos-hotspot.service)
                 HOTSPOT_ACTIVE=$(nmcli -t connection show --active 2>/dev/null | grep -c "easyos-hotspot" || true)

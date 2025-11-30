@@ -86,8 +86,17 @@ in {
       };
       
       script = ''
+        set -x  # Debug: show all commands
+        echo "=== easyos-hotspot service starting ==="
+        echo "Date: $(date)"
+        
+        # Debug: Show what files exist
+        echo "Checking marker files..."
+        ls -la /etc/easy/ 2>&1 || echo "/etc/easy/ not found"
+        
         # Check we're on either installed system or ISO mode
         if [ ! -f /etc/easy/installed ] && [ ! -f /etc/easy/iso-mode ]; then
+          echo "ERROR: Neither /etc/easy/installed nor /etc/easy/iso-mode exists"
           echo "Not running on installed system or ISO - skipping hotspot setup"
           exit 0
         fi
