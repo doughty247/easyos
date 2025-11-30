@@ -143,7 +143,7 @@ let
                                 for child in device.get('children', []):
                                     fstype = child.get('fstype')
                                     mountpoint = child.get('mountpoint')
-                                    if fstype and fstype not in ['', 'swap']:
+                                    if fstype and fstype not in ['''', 'swap']:
                                         has_data = True
                                     partitions.append({
                                         'name': child.get('name', ''''),
@@ -516,7 +516,7 @@ let
                     install_cfg = {
                         'targetDrive': target_drive,
                         'encrypt': encrypt,
-                        'encryptionPassword': encryption_password if encrypt else '',
+                        'encryptionPassword': encryption_password if encrypt else '''',
                         'channel': channel,
                         'hostname': admin.get('hostname', 'easeos'),
                         'username': admin.get('username'),
@@ -553,7 +553,7 @@ let
                     'running': False,
                     'progress': 0,
                     'stage': 'idle',
-                    'message': '',
+                    'message': '''',
                     'complete': False,
                     'error': None
                 }
