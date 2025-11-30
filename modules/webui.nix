@@ -67,6 +67,24 @@ let
         plaintext = aesgcm.decrypt(iv, ciphertext, None)
         return plaintext.decode('utf-8')
 
+    def validate_password_strength(password: str) -> str:
+        """Validate password meets security requirements.
+        Returns error message if invalid, None if valid.
+        Requirements: 8+ chars, 1 uppercase, 1 number, 1 symbol, no spaces.
+        """
+        import re
+        if not password or len(password) < 8:
+            return 'Password must be at least 8 characters'
+        if ' ' in password or '\t' in password:
+            return 'Password cannot contain spaces'
+        if not re.search(r'[A-Z]', password):
+            return 'Password must contain at least 1 uppercase letter'
+        if not re.search(r'[0-9]', password):
+            return 'Password must contain at least 1 number'
+        if not re.search(r'[!@#$%^&*()_+\\-=\\[\\]{};\\\':"\\\\|,.<>\\/?~\`]', password):
+            return 'Password must contain at least 1 symbol (!@#$%^&* etc.)'
+        return None  # Valid
+
     class Handler(SimpleHTTPRequestHandler):
         def _set_headers(self, code=200, ctype='application/json'):
             self.send_response(code)
@@ -408,6 +426,13 @@ let
                         self.wfile.write(json.dumps({'error': 'Username and password required'}).encode())
                         return
                     
+                    # Validate password strength
+                    password_error = validate_password_strength(password)
+                    if password_error:
+                        self._set_headers(400)
+                        self.wfile.write(json.dumps({'error': password_error}).encode())
+                        return
+                    
                     print(f"[SETUP] Creating account: {username}@{hostname}")
                     
                     # Hash password
@@ -460,6 +485,7 @@ let
                     data = json.loads(body or '{}')
                     target_drive = data.get('drive', '')
                     encrypt = data.get('encrypt', False)
+                    encryption_password = data.get('encryptionPassword', '')
                     channel = data.get('channel', 'stable')
                     
                     if not target_drive or not target_drive.startswith('/dev/'):
@@ -490,6 +516,7 @@ let
                     install_cfg = {
                         'targetDrive': target_drive,
                         'encrypt': encrypt,
+                        'encryptionPassword': encryption_password if encrypt else '',
                         'channel': channel,
                         'hostname': admin.get('hostname', 'easeos'),
                         'username': admin.get('username'),
@@ -675,6 +702,7 @@ in {
         
         TARGET=$(jq -r '.targetDrive' "$CONFIG_FILE")
         ENCRYPT=$(jq -r '.encrypt' "$CONFIG_FILE")
+        ENCRYPTION_PASSWORD=$(jq -r '.encryptionPassword // ""' "$CONFIG_FILE")
         CHANNEL=$(jq -r '.channel // "stable"' "$CONFIG_FILE")
         HOSTNAME=$(jq -r '.hostname // "easeos"' "$CONFIG_FILE")
         USERNAME=$(jq -r '.username' "$CONFIG_FILE")
@@ -727,20 +755,31 @@ in {
         
         mkfs.fat -F32 -n EFI "$EFI_PART" >> "$LOG_FILE" 2>&1
         
-        if [ "$ENCRYPT" = "true" ]; then
-          update_progress 30 "encrypting" "Setting up encryption..."
-          # TODO: Add LUKS encryption support
-          # For now, proceed without encryption
-          mkfs.btrfs -f -L nixos "$ROOT_PART" >> "$LOG_FILE" 2>&1
-        else
-          mkfs.btrfs -f -L nixos "$ROOT_PART" >> "$LOG_FILE" 2>&1
-        fi
+        # EXPERIMENTAL: LUKS encryption disabled until TPM auto-unlock is implemented
+        # TODO: Re-enable when we have TPM2 support for passphrase-less boot
+        # if [ "$ENCRYPT" = "true" ] && [ -n "$ENCRYPTION_PASSWORD" ]; then
+        #   update_progress 30 "encrypting" "Setting up disk encryption..."
+        #   echo "[INSTALL] Setting up LUKS encryption" | tee -a "$LOG_FILE"
+        #   
+        #   # Create LUKS container
+        #   echo -n "$ENCRYPTION_PASSWORD" | cryptsetup luksFormat --type luks2 --cipher aes-xts-plain64 --key-size 512 --hash sha256 --iter-time 2000 "$ROOT_PART" -
+        #   echo -n "$ENCRYPTION_PASSWORD" | cryptsetup open "$ROOT_PART" cryptroot -
+        #   
+        #   # Format the encrypted volume
+        #   mkfs.btrfs -f -L nixos /dev/mapper/cryptroot >> "$LOG_FILE" 2>&1
+        #   BTRFS_DEV="/dev/mapper/cryptroot"
+        #   LUKS_UUID=$(blkid -s UUID -o value "$ROOT_PART")
+        # else
+        mkfs.btrfs -f -L nixos "$ROOT_PART" >> "$LOG_FILE" 2>&1
+        BTRFS_DEV="$ROOT_PART"
+        LUKS_UUID=""
+        # fi
         
         # Stage 4: Mount and create subvolumes
         update_progress 35 "mounting" "Creating Btrfs subvolumes..."
         echo "[INSTALL] Creating subvolumes" | tee -a "$LOG_FILE"
         
-        mount "$ROOT_PART" /mnt
+        mount "$BTRFS_DEV" /mnt
         btrfs subvolume create /mnt/@root >> "$LOG_FILE" 2>&1
         btrfs subvolume create /mnt/@home >> "$LOG_FILE" 2>&1
         btrfs subvolume create /mnt/@nix >> "$LOG_FILE" 2>&1
@@ -749,12 +788,12 @@ in {
         umount /mnt
         
         # Remount with subvolumes
-        mount -o subvol=@root,compress=zstd:3,noatime "$ROOT_PART" /mnt
+        mount -o subvol=@root,compress=zstd:3,noatime "$BTRFS_DEV" /mnt
         mkdir -p /mnt/{boot,home,nix,var/log,.snapshots}
-        mount -o subvol=@home,compress=zstd:3,noatime "$ROOT_PART" /mnt/home
-        mount -o subvol=@nix,compress=zstd:3,noatime "$ROOT_PART" /mnt/nix
-        mount -o subvol=@log,compress=zstd:3,noatime "$ROOT_PART" /mnt/var/log
-        mount -o subvol=@snapshots,compress=zstd:3,noatime "$ROOT_PART" /mnt/.snapshots
+        mount -o subvol=@home,compress=zstd:3,noatime "$BTRFS_DEV" /mnt/home
+        mount -o subvol=@nix,compress=zstd:3,noatime "$BTRFS_DEV" /mnt/nix
+        mount -o subvol=@log,compress=zstd:3,noatime "$BTRFS_DEV" /mnt/var/log
+        mount -o subvol=@snapshots,compress=zstd:3,noatime "$BTRFS_DEV" /mnt/.snapshots
         mount "$EFI_PART" /mnt/boot
         
         # Stage 5: Clone flake
@@ -773,7 +812,33 @@ in {
         
         # Stage 7: Create credentials file
         update_progress 60 "credentials" "Setting up user account..."
-        cat > /mnt/etc/nixos/easyos/easy-credentials.nix << EOF
+        
+        # Add LUKS config if encryption was used
+        if [ -n "$LUKS_UUID" ]; then
+          cat > /mnt/etc/nixos/easyos/easy-credentials.nix << EOF
+        { lib, ... }:
+        {
+          networking.hostName = lib.mkForce "$HOSTNAME";
+          
+          # LUKS encryption configuration
+          boot.initrd.luks.devices."cryptroot" = {
+            device = "/dev/disk/by-uuid/$LUKS_UUID";
+            preLVM = true;
+            allowDiscards = true;
+          };
+          
+          users.users.$USERNAME = {
+            isNormalUser = true;
+            hashedPassword = "$PASSWORD_HASH";
+            extraGroups = [ "wheel" "networkmanager" "video" "docker" ];
+          };
+          
+          # Disable nixos default user
+          users.users.nixos.isNormalUser = lib.mkForce false;
+        }
+        EOF
+        else
+          cat > /mnt/etc/nixos/easyos/easy-credentials.nix << EOF
         { lib, ... }:
         {
           networking.hostName = lib.mkForce "$HOSTNAME";
@@ -788,6 +853,7 @@ in {
           users.users.nixos.isNormalUser = lib.mkForce false;
         }
         EOF
+        fi
         
         # Create installed marker
         mkdir -p /mnt/etc/easy

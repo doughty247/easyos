@@ -342,30 +342,61 @@
                  x-transition:leave="swipe-leave" x-transition:leave-start="swipe-leave-start" x-transition:leave-end="swipe-leave-end"
                  class="setup-card text-center">
                 <div class="setup-progress">
-                    <div class="step completed"></div><div class="step completed"></div><div class="step active"></div><div class="step"></div><div class="step"></div><div class="step"></div><div class="step"></div>
+                    <div class="step completed"></div><div class="step completed"></div><div class="step active"></div><div class="step"></div><div class="step"></div><div class="step"></div><div class="step"></div><div class="step"></div><div class="step"></div>
                 </div>
                 
-                <h2 class="text-xl font-bold text-ease-forest mb-2">Secure your garden</h2>
-                <p class="text-ease-soil text-sm mb-6">Choose a password for <span class="font-semibold" x-text="username"></span></p>
+                <h2 class="text-xl font-bold text-ease-forest mb-2">Build your fence</h2>
+                <p class="text-ease-soil text-sm mb-6">A strong password keeps your garden safe</p>
                 
                 <div class="space-y-4 mb-6 text-left">
                     <div>
                         <label class="block text-sm font-semibold text-ease-forest mb-2">Password</label>
-                        <input type="password" x-model="password" placeholder="Choose a strong password" autocomplete="new-password"
-                               class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-ease-leaf outline-none">
+                        <input type="password" x-model="password" placeholder="Create a strong password" autocomplete="new-password"
+                               @focus="showPasswordHints = true"
+                               class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-ease-leaf outline-none"
+                               :class="{ 'border-amber-400': password && validatePasswordStrength(password) }">
+                        
+                        <!-- Live password strength hints - only show when focused or has issues -->
+                        <div x-show="showPasswordHints && password" x-transition class="mt-2 text-xs space-y-1">
+                            <div class="flex items-center gap-2" :class="password.length >= 8 ? 'text-ease-leaf' : 'text-gray-400'">
+                                <span x-text="password.length >= 8 ? '✓' : '○'"></span>
+                                <span>8+ characters</span>
+                            </div>
+                            <div class="flex items-center gap-2" :class="/[A-Z]/.test(password) ? 'text-ease-leaf' : 'text-gray-400'">
+                                <span x-text="/[A-Z]/.test(password) ? '✓' : '○'"></span>
+                                <span>Uppercase letter</span>
+                            </div>
+                            <div class="flex items-center gap-2" :class="/[0-9]/.test(password) ? 'text-ease-leaf' : 'text-gray-400'">
+                                <span x-text="/[0-9]/.test(password) ? '✓' : '○'"></span>
+                                <span>Number</span>
+                            </div>
+                            <div class="flex items-center gap-2" :class="/[!@#$%^&*()_+\-=\[\]{};':&quot;\\|,.<>\/?~\`]/.test(password) ? 'text-ease-leaf' : 'text-gray-400'">
+                                <span x-text="/[!@#$%^&*()_+\-=\[\]{};':&quot;\\|,.<>\/?~\`]/.test(password) ? '✓' : '○'"></span>
+                                <span>Symbol (!@#$ etc.)</span>
+                            </div>
+                            <div class="flex items-center gap-2" :class="!/\s/.test(password) ? 'text-ease-leaf' : 'text-red-400'">
+                                <span x-text="!/\s/.test(password) ? '✓' : '✗'"></span>
+                                <span>No spaces</span>
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-ease-forest mb-2">Confirm Password</label>
                         <input type="password" x-model="passwordConfirm" placeholder="Type it again" autocomplete="new-password"
+                               @paste.prevent
                                class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-ease-leaf outline-none"
-                               :class="{ 'border-red-300': passwordConfirm && password !== passwordConfirm }">
+                               :class="{ 'border-red-300': passwordConfirm && password !== passwordConfirm, 'border-ease-leaf': passwordConfirm && password === passwordConfirm }">
                         <p x-show="passwordConfirm && password !== passwordConfirm" class="text-xs text-red-500 mt-1">Passwords don't match</p>
+                        <p x-show="passwordConfirm && password === passwordConfirm" class="text-xs text-ease-leaf mt-1">✓ Passwords match</p>
                     </div>
                 </div>
                 
                 <p x-show="accountError" class="text-red-500 text-sm mb-4" x-text="accountError"></p>
                 
-                <button @click="validatePassword()" :disabled="!password || password !== passwordConfirm" class="setup-btn">Continue</button>
+                <button @click="validatePassword()" :disabled="!password || password !== passwordConfirm || validatePasswordStrength(password)" class="setup-btn">
+                    <span x-show="!validatePasswordStrength(password) && password === passwordConfirm && password">Continue</span>
+                    <span x-show="validatePasswordStrength(password) || password !== passwordConfirm || !password">Continue</span>
+                </button>
                 <button @click="goToStep('account')" class="setup-btn-secondary w-full mt-2">&larr; Go Back</button>
             </div>
             
@@ -434,7 +465,36 @@
                     </template>
                 </div>
                 
-                <button x-show="!storageLoading && storageDevices.length > 0" @click="confirmStorage()" :disabled="!selectedDrive" class="setup-btn">
+                <!-- Encryption Option - EXPERIMENTAL: Disabled until TPM auto-unlock is implemented -->
+                <!-- TODO: Re-enable when we have TPM2 support for passphrase-less boot -->
+                <div x-show="!storageLoading && storageDevices.length > 0 && selectedDrive" class="mb-6 p-4 bg-gray-100 rounded-xl border border-gray-200 opacity-60">
+                    <label class="flex items-start gap-3 cursor-not-allowed">
+                        <input type="checkbox" disabled class="w-5 h-5 mt-1 rounded border-gray-300 text-gray-400">
+                        <div class="flex-1">
+                            <span class="font-semibold text-gray-500">Encrypt disk <span class="ml-2 px-2 py-0.5 text-xs bg-amber-100 text-amber-700 rounded-full">Coming Soon</span></span>
+                            <p class="text-xs text-gray-400 mt-1">Disk encryption with TPM auto-unlock is under development. No passphrase needed at boot!</p>
+                        </div>
+                    </label>
+                    
+                    <!-- Encryption password options - hidden while feature is experimental
+                    <div x-show="enableEncryption" class="mt-4 space-y-3">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" x-model="useSamePasswordForEncryption" class="w-4 h-4 rounded border-gray-300 text-ease-leaf focus:ring-ease-leaf">
+                            <span class="text-sm text-ease-forest">Use my account password for encryption</span>
+                        </label>
+                        
+                        <div x-show="!useSamePasswordForEncryption" class="space-y-2">
+                            <input type="password" x-model="encryptionPassword" placeholder="Encryption passphrase"
+                                   class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-ease-leaf outline-none text-sm">
+                            <input type="password" x-model="encryptionPasswordConfirm" placeholder="Confirm passphrase"
+                                   class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:border-ease-leaf outline-none text-sm"
+                                   :class="{ 'border-red-300': encryptionPasswordConfirm && encryptionPassword !== encryptionPasswordConfirm }">
+                        </div>
+                    </div>
+                    -->
+                </div>
+                
+                <button x-show="!storageLoading && storageDevices.length > 0" @click="confirmStorage()" :disabled="!selectedDrive || (enableEncryption && !useSamePasswordForEncryption && encryptionPassword !== encryptionPasswordConfirm)" class="setup-btn">
                     <span x-show="!selectedDriveHasData">Plant Here</span>
                     <span x-show="selectedDriveHasData">Clear & Plant</span>
                 </button>
@@ -508,8 +568,9 @@
                 <p class="text-ease-soil text-sm" x-text="germinationDetail"></p>
                 
                 <p x-show="germinationError" class="text-red-500 text-sm mt-4" x-text="germinationError"></p>
-                <button x-show="germinationError" @click="goToStep('soil')" class="setup-btn mt-4">Try Again</button>
-                <p x-show="testMode && !germinationError" class="text-xs text-amber-600 mt-4">Test mode: WiFi connection is simulated</p>
+                <button x-show="germinationError && isISOMode" @click="goToStep('storage')" class="setup-btn mt-4">Try Again</button>
+                <button x-show="germinationError && !isISOMode" @click="goToStep('soil')" class="setup-btn mt-4">Try Again</button>
+                <p x-show="testMode && !germinationError" class="text-xs text-amber-600 mt-4">Test mode: Installation is simulated</p>
             </div>
             
             <!-- Step 7: Alive -->
@@ -575,12 +636,24 @@
                 hostname: '',
                 usernameError: null,
                 accountError: null,
+                showPasswordHints: false,
+                
+                // Root password - always same as user password for simplicity
+                sameRootPassword: true,
+                rootPassword: '',
+                rootPasswordConfirm: '',
                 
                 // Storage
                 storageDevices: [],
                 storageLoading: true,
                 storageError: null,
                 selectedDrive: null,
+                
+                // Encryption - DISABLED until TPM auto-unlock is implemented
+                enableEncryption: false,
+                useSamePasswordForEncryption: true,
+                encryptionPassword: '',
+                encryptionPasswordConfirm: '',
 
                 // WiFi
                 wifiNetworks: [],
@@ -589,11 +662,13 @@
                 wifiPassword: '',
                 encryptionKey: null,
                 
-                // Germination
+                // Germination / Installation
                 germinationProgress: 0,
                 germinationStatus: 'Rooting...',
                 germinationDetail: 'Finding nutrients in the soil',
                 germinationError: null,
+                installationId: null,
+                installPollInterval: null,
                 
                 get selectedDriveHasData() {
                     const drive = this.storageDevices.find(d => d.path === this.selectedDrive);
@@ -645,15 +720,51 @@
                     this.goToStep('password');
                 },
                 
+                // Password validation: 8+ chars, 1 uppercase, 1 number, 1 symbol, no spaces
+                validatePasswordStrength(password) {
+                    if (!password || password.length < 8) {
+                        return 'Password must be at least 8 characters';
+                    }
+                    if (/\s/.test(password)) {
+                        return 'Password cannot contain spaces';
+                    }
+                    if (!/[A-Z]/.test(password)) {
+                        return 'Password must contain at least 1 uppercase letter';
+                    }
+                    if (!/[0-9]/.test(password)) {
+                        return 'Password must contain at least 1 number';
+                    }
+                    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)) {
+                        return 'Password must contain at least 1 symbol (!@#$%^&* etc.)';
+                    }
+                    return null; // Valid
+                },
+                
                 validatePassword() {
                     this.accountError = null;
-                    if (!this.password || this.password.length < 6) {
-                        this.accountError = 'Password must be at least 6 characters';
+                    
+                    // Check password strength
+                    const passwordError = this.validatePasswordStrength(this.password);
+                    if (passwordError) {
+                        this.accountError = passwordError;
                         return;
                     }
                     if (this.password !== this.passwordConfirm) {
                         this.accountError = 'Passwords do not match';
                         return;
+                    }
+                    
+                    // Validate root password if different
+                    if (!this.sameRootPassword) {
+                        const rootPasswordError = this.validatePasswordStrength(this.rootPassword);
+                        if (rootPasswordError) {
+                            this.accountError = 'Root: ' + rootPasswordError;
+                            return;
+                        }
+                        if (this.rootPassword !== this.rootPasswordConfirm) {
+                            this.accountError = 'Root passwords do not match';
+                            return;
+                        }
                     }
                     
                     if (this.isISOMode) {
@@ -805,6 +916,27 @@
                     this.germinationProgress = 0;
                     this.germinationError = null;
                     
+                    try {
+                        if (this.isISOMode) {
+                            // Full installation mode
+                            await this.runInstallation();
+                        } else {
+                            // Normal setup mode (just account + WiFi)
+                            await this.runNormalSetup();
+                        }
+                    } catch (e) {
+                        console.error('Setup failed:', e);
+                        this.germinationError = e.message || 'Something went wrong';
+                        this.germinationStatus = 'Wilted...';
+                        this.germinationDetail = 'Setup failed';
+                        if (this.installPollInterval) {
+                            clearInterval(this.installPollInterval);
+                            this.installPollInterval = null;
+                        }
+                    }
+                },
+                
+                async runNormalSetup() {
                     const stages = [
                         { progress: 10, status: 'Rooting...', detail: 'Finding nutrients' },
                         { progress: 25, status: 'Germinating...', detail: 'Creating account' },
@@ -814,84 +946,223 @@
                         { progress: 90, status: 'Almost there...', detail: 'Configuring system' },
                     ];
                     
-                    try {
-                        // Stage 1
-                        this.germinationProgress = stages[0].progress;
-                        this.germinationStatus = stages[0].status;
-                        this.germinationDetail = stages[0].detail;
-                        await this.sleep(500);
-                        
-                        // Create account
-                        this.germinationProgress = stages[1].progress;
-                        this.germinationStatus = stages[1].status;
-                        this.germinationDetail = stages[1].detail;
-                        
-                        const accountData = { username: this.username, password: this.password, hostname: this.hostname || 'easeos' };
-                        let accountBody;
-                        if (this.encryptionKey) {
-                            const encrypted = await this.encryptData(accountData, this.encryptionKey);
-                            accountBody = JSON.stringify({ encrypted: true, data: encrypted });
-                        } else {
-                            accountBody = JSON.stringify(accountData);
-                        }
-                        
-                        const accountRes = await fetch('/api/setup/account', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: accountBody
-                        });
-                        if (!accountRes.ok) throw new Error(await accountRes.text() || 'Failed to create account');
-                        
-                        // Encrypt WiFi
-                        this.germinationProgress = stages[2].progress;
-                        this.germinationStatus = stages[2].status;
-                        this.germinationDetail = stages[2].detail;
-                        
-                        const wifiData = { ssid: this.selectedNetwork, password: this.wifiPassword };
-                        let wifiBody;
-                        if (this.encryptionKey) {
-                            const encrypted = await this.encryptData(wifiData, this.encryptionKey);
-                            wifiBody = JSON.stringify({ encrypted: true, data: encrypted });
-                        } else {
-                            wifiBody = JSON.stringify(wifiData);
-                        }
-                        
-                        await this.sleep(400);
-                        
-                        // Connect WiFi
-                        this.germinationProgress = stages[3].progress;
-                        this.germinationStatus = stages[3].status;
-                        this.germinationDetail = stages[3].detail;
-                        
-                        const wifiRes = await fetch('/api/wifi/connect', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: wifiBody
-                        });
-                        if (!wifiRes.ok) throw new Error(await wifiRes.text() || 'WiFi connection failed');
-                        
-                        const wifiResult = await wifiRes.json();
-                        if (!wifiResult.success) throw new Error(wifiResult.error || 'WiFi connection failed');
-                        
-                        // Finalize
-                        this.germinationProgress = stages[4].progress;
-                        this.germinationStatus = stages[4].status;
-                        this.germinationDetail = stages[4].detail;
-                        await this.sleep(500);
-                        
-                        // Complete
-                        this.germinationProgress = 100;
-                        this.germinationStatus = 'Planted!';
-                        this.germinationDetail = 'Cooper is taking root';
-                        await this.sleep(1000);
-                        this.step = 'alive';
-                        
-                    } catch (e) {
-                        console.error('Setup failed:', e);
-                        this.germinationError = e.message || 'Something went wrong';
-                        this.germinationStatus = 'Wilted...';
-                        this.germinationDetail = 'Setup failed';
+                    // Stage 1
+                    this.germinationProgress = stages[0].progress;
+                    this.germinationStatus = stages[0].status;
+                    this.germinationDetail = stages[0].detail;
+                    await this.sleep(500);
+                    
+                    // Create account
+                    this.germinationProgress = stages[1].progress;
+                    this.germinationStatus = stages[1].status;
+                    this.germinationDetail = stages[1].detail;
+                    
+                    const accountData = { 
+                        username: this.username, 
+                        password: this.password, 
+                        rootPassword: this.sameRootPassword ? this.password : this.rootPassword,
+                        hostname: this.hostname || 'easeos' 
+                    };
+                    let accountBody;
+                    if (this.encryptionKey) {
+                        const encrypted = await this.encryptData(accountData, this.encryptionKey);
+                        accountBody = JSON.stringify({ encrypted: true, data: encrypted });
+                    } else {
+                        accountBody = JSON.stringify(accountData);
                     }
+                    
+                    const accountRes = await fetch('/api/setup/account', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: accountBody
+                    });
+                    if (!accountRes.ok) throw new Error(await accountRes.text() || 'Failed to create account');
+                    
+                    // Encrypt WiFi
+                    this.germinationProgress = stages[2].progress;
+                    this.germinationStatus = stages[2].status;
+                    this.germinationDetail = stages[2].detail;
+                    
+                    const wifiData = { ssid: this.selectedNetwork, password: this.wifiPassword };
+                    let wifiBody;
+                    if (this.encryptionKey) {
+                        const encrypted = await this.encryptData(wifiData, this.encryptionKey);
+                        wifiBody = JSON.stringify({ encrypted: true, data: encrypted });
+                    } else {
+                        wifiBody = JSON.stringify(wifiData);
+                    }
+                    
+                    await this.sleep(400);
+                    
+                    // Connect WiFi
+                    this.germinationProgress = stages[3].progress;
+                    this.germinationStatus = stages[3].status;
+                    this.germinationDetail = stages[3].detail;
+                    
+                    const wifiRes = await fetch('/api/wifi/connect', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: wifiBody
+                    });
+                    if (!wifiRes.ok) throw new Error(await wifiRes.text() || 'WiFi connection failed');
+                    
+                    const wifiResult = await wifiRes.json();
+                    if (!wifiResult.success) throw new Error(wifiResult.error || 'WiFi connection failed');
+                    
+                    // Finalize
+                    this.germinationProgress = stages[4].progress;
+                    this.germinationStatus = stages[4].status;
+                    this.germinationDetail = stages[4].detail;
+                    await this.sleep(500);
+                    
+                    // Complete
+                    this.germinationProgress = 100;
+                    this.germinationStatus = 'Planted!';
+                    this.germinationDetail = 'Cooper is taking root';
+                    await this.sleep(1000);
+                    this.step = 'alive';
+                },
+                
+                async runInstallation() {
+                    // ISO Mode Installation Flow:
+                    // 1. Save account via /api/setup/account (production reads this for install)
+                    // 2. Start install via /api/install/start 
+                    // 3. Poll /api/install/status for progress
+                    
+                    this.germinationProgress = 5;
+                    this.germinationStatus = 'Preparing soil...';
+                    this.germinationDetail = 'Setting up account';
+                    
+                    // Step 1: Save account first (production expects this)
+                    const accountData = { 
+                        username: this.username, 
+                        password: this.password,
+                        rootPassword: this.sameRootPassword ? this.password : this.rootPassword,
+                        hostname: this.hostname || 'easeos' 
+                    };
+                    
+                    let accountBody;
+                    if (this.encryptionKey) {
+                        const encrypted = await this.encryptData(accountData, this.encryptionKey);
+                        accountBody = JSON.stringify({ encrypted: true, data: encrypted });
+                    } else {
+                        accountBody = JSON.stringify(accountData);
+                    }
+                    
+                    const accountRes = await fetch('/api/setup/account', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: accountBody
+                    });
+                    if (!accountRes.ok) throw new Error(await accountRes.text() || 'Failed to create account');
+                    
+                    // Step 2: Start installation
+                    this.germinationProgress = 10;
+                    this.germinationStatus = 'Tilling the earth...';
+                    this.germinationDetail = 'Starting installation';
+                    
+                    const installData = {
+                        drive: this.selectedDrive,
+                        encrypt: this.enableEncryption,
+                        encryptionPassword: this.enableEncryption 
+                            ? (this.useSamePasswordForEncryption ? this.password : this.encryptionPassword)
+                            : null,
+                        // Include credentials for install script
+                        username: this.username,
+                        password: this.password,
+                        rootPassword: this.sameRootPassword ? this.password : this.rootPassword,
+                        hostname: this.hostname || 'easeos',
+                        wifi: this.selectedNetwork ? {
+                            ssid: this.selectedNetwork.ssid,
+                            password: this.wifiPassword
+                        } : null,
+                        channel: 'stable'
+                    };
+                    
+                    let installBody;
+                    if (this.encryptionKey) {
+                        const encrypted = await this.encryptData(installData, this.encryptionKey);
+                        installBody = JSON.stringify({ encrypted: true, data: encrypted });
+                    } else {
+                        installBody = JSON.stringify(installData);
+                    }
+                    
+                    const installRes = await fetch('/api/install/start', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: installBody
+                    });
+                    
+                    if (!installRes.ok) {
+                        const errText = await installRes.text();
+                        throw new Error(errText || 'Failed to start installation');
+                    }
+                    
+                    const installResult = await installRes.json();
+                    if (!installResult.success) {
+                        throw new Error(installResult.error || 'Installation failed to start');
+                    }
+                    
+                    this.installationId = installResult.installId || 'install';
+                    
+                    // Poll for installation progress
+                    await this.pollInstallProgress();
+                },
+                
+                async pollInstallProgress() {
+                    const stageMessages = {
+                        'preparing': { status: 'Preparing soil...', detail: 'Getting ready to plant' },
+                        'partitioning': { status: 'Tilling the earth...', detail: 'Creating partitions' },
+                        'formatting': { status: 'Enriching the soil...', detail: 'Formatting filesystems' },
+                        'mounting': { status: 'Setting the plot...', detail: 'Mounting partitions' },
+                        'cloning': { status: 'Planting seeds...', detail: 'Cloning easeOS' },
+                        'configuring': { status: 'Watering seeds...', detail: 'Generating configuration' },
+                        'credentials': { status: 'Adding fertilizer...', detail: 'Setting up credentials' },
+                        'installing': { status: 'Growing roots...', detail: 'Installing NixOS (this takes a while)' },
+                        'finalizing': { status: 'Sprouting leaves...', detail: 'Finalizing installation' },
+                        'complete': { status: 'Planted!', detail: 'Cooper is ready to grow' },
+                        'error': { status: 'Wilted...', detail: 'Installation failed' }
+                    };
+                    
+                    return new Promise((resolve, reject) => {
+                        const poll = async () => {
+                            try {
+                                const res = await fetch('/api/install/status');
+                                if (!res.ok) {
+                                    throw new Error('Failed to get install status');
+                                }
+                                
+                                const status = await res.json();
+                                const stage = status.stage || 'preparing';
+                                const progress = status.progress || 0;
+                                
+                                const msg = stageMessages[stage] || stageMessages['preparing'];
+                                this.germinationProgress = progress;
+                                this.germinationStatus = msg.status;
+                                this.germinationDetail = status.message || msg.detail;
+                                
+                                if (stage === 'complete') {
+                                    clearInterval(this.installPollInterval);
+                                    this.installPollInterval = null;
+                                    this.germinationProgress = 100;
+                                    await this.sleep(1000);
+                                    this.step = 'alive';
+                                    resolve();
+                                } else if (stage === 'error' || status.error) {
+                                    clearInterval(this.installPollInterval);
+                                    this.installPollInterval = null;
+                                    reject(new Error(status.error || 'Installation failed'));
+                                }
+                            } catch (e) {
+                                console.error('Poll error:', e);
+                                // Don't fail immediately - backend might be busy
+                            }
+                        };
+                        
+                        // Poll every 2 seconds
+                        poll();
+                        this.installPollInterval = setInterval(poll, 2000);
+                    });
                 },
                 
                 async completeSetup() {

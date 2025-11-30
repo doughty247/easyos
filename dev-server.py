@@ -33,6 +33,16 @@ WEBUI_DIR = os.path.join(ROOT, 'webui', 'templates')
 STORE_DIR = os.path.join(ROOT, 'store', 'apps')
 CONFIG_FILE = os.path.join(ROOT, 'dev-config.json')
 
+# Global install progress state for simulation
+INSTALL_PROGRESS = {
+    'running': False,
+    'progress': 0,
+    'stage': 'idle',
+    'message': '',
+    'complete': False,
+    'error': None
+}
+
 # Session encryption key (simulates Kyber-1024 shared secret)
 # Generate a new 16-character key for each server restart
 SESSION_KEY = secrets.token_urlsafe(12)[:16]  # 16 chars
@@ -75,6 +85,25 @@ def aes_decrypt(encrypted_b64: str, key_string: str) -> str:
     aesgcm = AESGCM(key)
     plaintext = aesgcm.decrypt(iv, ciphertext, None)
     return plaintext.decode('utf-8')
+
+import re
+
+def validate_password_strength(password: str) -> str:
+    """Validate password meets security requirements.
+    Returns error message if invalid, None if valid.
+    Requirements: 8+ chars, 1 uppercase, 1 number, 1 symbol, no spaces.
+    """
+    if not password or len(password) < 8:
+        return 'Password must be at least 8 characters'
+    if ' ' in password or '\t' in password:
+        return 'Password cannot contain spaces'
+    if not re.search(r'[A-Z]', password):
+        return 'Password must contain at least 1 uppercase letter'
+    if not re.search(r'[0-9]', password):
+        return 'Password must contain at least 1 number'
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?~`]', password):
+        return 'Password must contain at least 1 symbol (!@#$%^&* etc.)'
+    return None  # Valid
 
 # Initialize dev config if not exists
 if not os.path.exists(CONFIG_FILE):
@@ -145,28 +174,51 @@ class DevHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(f.read())
         
         elif p == '/api/storage/detect':
-            # DEV MODE: Return empty drives array to test "no drives" UI
-            # Set to True to simulate drives being found
-            simulate_drives = False
+            # DEV MODE: Simulate drives for testing
+            # Set simulate_drives = True to show test drives
+            simulate_drives = False  # Set True to test with fake drives
             self._set_headers()
             if simulate_drives:
                 self.wfile.write(json.dumps({
                     'drives': [
-                        {'path': '/dev/sda', 'model': 'Samsung SSD 870', 'size': '500GB', 'hasData': False},
-                        {'path': '/dev/sdb', 'model': 'WD Blue 1TB', 'size': '1TB', 'hasData': True}
-                    ]
+                        {'name': 'sda', 'path': '/dev/sda', 'model': 'Samsung SSD 870', 'size': '500GB', 'hasData': False, 'isBlank': True, 'transport': 'sata', 'isVirtual': False, 'partitions': []},
+                        {'name': 'sdb', 'path': '/dev/sdb', 'model': 'WD Blue 1TB', 'size': '1TB', 'hasData': True, 'isBlank': False, 'transport': 'sata', 'isVirtual': False, 'partitions': [{'name': 'sdb1', 'size': '512M', 'fstype': 'vfat', 'mountpoint': ''}, {'name': 'sdb2', 'size': '999.5G', 'fstype': 'ext4', 'mountpoint': ''}]},
+                        {'name': 'nvme0n1', 'path': '/dev/nvme0n1', 'model': 'WD Black SN850X', 'size': '2TB', 'hasData': False, 'isBlank': True, 'transport': 'nvme', 'isVirtual': False, 'partitions': []}
+                    ],
+                    'isVM': False,
+                    'autoInstallDrive': None
                 }).encode())
             else:
-                self.wfile.write(json.dumps({'drives': []}).encode())
+                self.wfile.write(json.dumps({'drives': [], 'isVM': False, 'autoInstallDrive': None}).encode())
         
         elif p == '/api/system/info':
             self._set_headers()
-            # DEV MODE: Set isISO to True to test storage selection step
+            # DEV MODE: Set isISO to True to test full install flow
             self.wfile.write(json.dumps({
                 'isISO': True,
+                'isInstalled': False,
+                'channel': 'stable',
+                'mode': 'live-installer',
                 'version': '1.0.0-dev',
                 'hostname': 'easeos-dev'
             }).encode())
+        
+        elif p == '/api/tpm/detect':
+            # DEV MODE: Simulate TPM2 detection
+            self._set_headers()
+            self.wfile.write(json.dumps({
+                'available': True,
+                'device': '/dev/tpmrm0',
+                'version': '2.0',
+                'manufacturer': 'STM',
+                'canEnroll': True
+            }).encode())
+        
+        elif p == '/api/install/status':
+            # Installation progress - return current simulated progress
+            global INSTALL_PROGRESS
+            self._set_headers()
+            self.wfile.write(json.dumps(INSTALL_PROGRESS).encode())
                 
         elif p == '/api/config':
             try:
@@ -403,17 +455,35 @@ class DevHandler(SimpleHTTPRequestHandler):
                     username = account.get('username', '')
                     password = account.get('password', '')
                     hostname = account.get('hostname', 'easeos')
+                    root_password = account.get('rootPassword', '')  # Same as admin if empty
                     print(f"\n[CRYPTO] Received AES-256-GCM encrypted account credentials")
                 else:
                     username = data.get('username', '')
                     password = data.get('password', '')
                     hostname = data.get('hostname', 'easeos')
+                    root_password = data.get('rootPassword', '')
                     print(f"\n[WARN] Received unencrypted account credentials")
+                
+                # Validate password strength: 8+ chars, 1 uppercase, 1 number, 1 symbol, no spaces
+                password_error = validate_password_strength(password)
+                if password_error:
+                    self._set_headers(400)
+                    self.wfile.write(json.dumps({'error': password_error}).encode())
+                    return
+                
+                # Validate root password if provided separately
+                if root_password:
+                    root_password_error = validate_password_strength(root_password)
+                    if root_password_error:
+                        self._set_headers(400)
+                        self.wfile.write(json.dumps({'error': 'Root password: ' + root_password_error}).encode())
+                        return
                 
                 print(f"[DEV] Create Account:")
                 print(f"      Username: {username}")
                 print(f"      Password: {'*' * len(password)}")
                 print(f"      Hostname: {hostname}")
+                print(f"      Root Password: {'same as admin' if not root_password else '*' * len(root_password)}")
                 
                 # In production, this would:
                 # 1. Hash the password with openssl passwd -6
@@ -430,6 +500,7 @@ class DevHandler(SimpleHTTPRequestHandler):
                 cfg['admin'] = {
                     'username': username,
                     'hostname': hostname,
+                    'passwordHash': '[DEV_MODE_HASH]',
                     'created': True
                 }
                 
@@ -446,6 +517,138 @@ class DevHandler(SimpleHTTPRequestHandler):
                 print(f"[ERROR] Account creation failed: {e}")
                 self._set_headers(500)
                 self.wfile.write(json.dumps({'error': str(e)}).encode())
+        
+        elif p == '/api/install/start':
+            # Start installation (ISO mode simulation)
+            try:
+                data = json.loads(body or '{}')
+                
+                # Decrypt if encrypted
+                if data.get('encrypted') and HAS_CRYPTO:
+                    decrypted_json = aes_decrypt(data.get('data', ''), SESSION_KEY)
+                    install_data = json.loads(decrypted_json)
+                    print(f"\n[CRYPTO] Received AES-256-GCM encrypted install data")
+                else:
+                    install_data = data
+                    print(f"\n[WARN] Received unencrypted install data")
+                
+                drive = install_data.get('drive', '')
+                encrypt = install_data.get('encrypt', False)
+                username = install_data.get('username', '')
+                password = install_data.get('password', '')
+                root_password = install_data.get('rootPassword', '')
+                hostname = install_data.get('hostname', 'easeos')
+                encryption_password = install_data.get('encryptionPassword', '')
+                wifi = install_data.get('wifi', {})
+                
+                print(f"[DEV] Install Start:")
+                print(f"      Drive: {drive}")
+                print(f"      Encrypt: {encrypt}")
+                print(f"      Username: {username}")
+                print(f"      Password: {'*' * len(password)}")
+                print(f"      Root Password: {'same as admin' if not root_password else '*' * len(root_password)}")
+                print(f"      Hostname: {hostname}")
+                print(f"      Encryption Password: {'*' * len(encryption_password) if encryption_password else 'none'}")
+                print(f"      WiFi SSID: {wifi.get('ssid', 'none')}")
+                
+                if not drive:
+                    self._set_headers(400)
+                    self.wfile.write(json.dumps({'error': 'No drive specified'}).encode())
+                    return
+                
+                if not username or not password:
+                    self._set_headers(400)
+                    self.wfile.write(json.dumps({'error': 'Username and password required'}).encode())
+                    return
+                
+                # Validate password strength: 8+ chars, 1 uppercase, 1 number, 1 symbol, no spaces
+                password_error = validate_password_strength(password)
+                if password_error:
+                    self._set_headers(400)
+                    self.wfile.write(json.dumps({'error': password_error}).encode())
+                    return
+                
+                # Store install config
+                try:
+                    with open(CONFIG_FILE, 'r') as f:
+                        cfg = json.load(f)
+                except:
+                    cfg = {}
+                
+                install_id = 'install_' + __import__('time').strftime('%Y%m%d_%H%M%S')
+                cfg['install'] = {
+                    'id': install_id,
+                    'drive': drive,
+                    'encrypt': encrypt,
+                    'username': username,
+                    'hostname': hostname,
+                    'wifi_ssid': wifi.get('ssid', ''),
+                    'started': True,
+                    'startedAt': __import__('time').strftime('%Y-%m-%dT%H:%M:%S')
+                }
+                
+                with open(CONFIG_FILE, 'w') as f:
+                    json.dump(cfg, f, indent=2)
+                
+                # Start background simulation thread
+                def simulate_install():
+                    global INSTALL_PROGRESS
+                    INSTALL_PROGRESS = {
+                        'running': True,
+                        'stage': 'preparing',
+                        'progress': 0,
+                        'message': 'Starting installation...',
+                        'complete': False,
+                        'error': None
+                    }
+                    stages = [
+                        ('preparing', 5, 'Initializing...'),
+                        ('partitioning', 15, 'Creating partitions...'),
+                        ('formatting', 25, 'Formatting filesystem...'),
+                        ('mounting', 35, 'Mounting partitions...'),
+                        ('cloning', 45, 'Cloning easeOS...'),
+                        ('configuring', 55, 'Generating configuration...'),
+                        ('credentials', 65, 'Setting up credentials...'),
+                        ('installing', 75, 'Installing NixOS (simulated)...'),
+                        ('installing', 85, 'Building system...'),
+                        ('finalizing', 95, 'Finishing up...'),
+                        ('complete', 100, 'Installation complete!'),
+                    ]
+                    import time
+                    for stage, progress, message in stages:
+                        INSTALL_PROGRESS = {
+                            'running': stage != 'complete',
+                            'stage': stage,
+                            'progress': progress,
+                            'message': message,
+                            'complete': stage == 'complete',
+                            'error': None
+                        }
+                        time.sleep(2)  # 2 seconds per stage for simulation
+                    print("[DEV] Installation simulation complete")
+                
+                # Start thread
+                import threading
+                thread = threading.Thread(target=simulate_install, daemon=True)
+                thread.start()
+                
+                self._set_headers(202)
+                self.wfile.write(json.dumps({
+                    'success': True,
+                    'started': True,
+                    'installId': install_id,
+                    'drive': drive,
+                    'message': '[DEV] Installation simulation started'
+                }).encode())
+            except Exception as e:
+                print(f"[ERROR] Install start failed: {e}")
+                self._set_headers(500)
+                self.wfile.write(json.dumps({'error': str(e)}).encode())
+        
+        elif p == '/api/system/reboot':
+            print("\n[DEV] Reboot requested (simulated)")
+            self._set_headers(200)
+            self.wfile.write(json.dumps({'rebooting': True, 'dev': True}).encode())
             
         else:
             self.send_error(404)

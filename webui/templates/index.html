@@ -2941,13 +2941,34 @@
                     this.setupStep = 'password';
                 },
                 
+                // Password validation: 8+ chars, 1 uppercase, 1 number, 1 symbol, no spaces
+                validatePasswordStrength(password) {
+                    if (!password || password.length < 8) {
+                        return 'Password must be at least 8 characters';
+                    }
+                    if (/\s/.test(password)) {
+                        return 'Password cannot contain spaces';
+                    }
+                    if (!/[A-Z]/.test(password)) {
+                        return 'Password must contain at least 1 uppercase letter';
+                    }
+                    if (!/[0-9]/.test(password)) {
+                        return 'Password must contain at least 1 number';
+                    }
+                    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password)) {
+                        return 'Password must contain at least 1 symbol (!@#$%^&* etc.)';
+                    }
+                    return null; // Valid
+                },
+                
                 // Validate password and move to storage step (ISO) or WiFi step (installed)
                 validatePassword() {
                     this.setupAccountError = null;
                     
-                    // Validate password
-                    if (!this.setupPassword || this.setupPassword.length < 6) {
-                        this.setupAccountError = 'Password must be at least 6 characters';
+                    // Check password strength
+                    const passwordError = this.validatePasswordStrength(this.setupPassword);
+                    if (passwordError) {
+                        this.setupAccountError = passwordError;
                         return;
                     }
                     

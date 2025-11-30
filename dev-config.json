@@ -21,8 +21,19 @@
     "enable": true
   },
   "admin": {
-    "username": "rhserhrseh",
-    "hostname": "srsdrg",
+    "username": "erhwehwe5hw",
+    "hostname": "sreaer",
+    "passwordHash": "[DEV_MODE_HASH]",
     "created": true
+  },
+  "install": {
+    "id": "install_20251130_032450",
+    "drive": "/dev/sda",
+    "encrypt": false,
+    "username": "erhwehwe5hw",
+    "hostname": "sreaer",
+    "wifi_ssid": "",
+    "started": true,
+    "startedAt": "2025-11-30T03:24:50"
   }
 }
