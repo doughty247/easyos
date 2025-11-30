@@ -107,6 +107,9 @@
               timeZone = "UTC";
               mode = "first-run";
             };
+            
+            # ISO mode marker - enables hotspot and web UI for live installation
+            environment.etc."easy/iso-mode".text = "live-installer";
 
             # Enable NetworkManager and disable wpa_supplicant
             networking.networkmanager.enable = true;
@@ -155,19 +158,23 @@
               (writeShellScriptBin "easy-help" ''
                 cat << 'EOF'
 
-easeOS Installer - Quick Reference
+easeOS Setup - Quick Reference
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-GETTING STARTED
-    easyos-install                      Launch the installer
-    sudo nmtui                          Configure network (if needed)
-  Note: Internet is required (installer fetches latest flake and uses caches)
+🌱 WEB-BASED SETUP (RECOMMENDED)
+    1. Connect to WiFi: "easeOS-Setup" (open, no password)
+    2. Open browser: http://10.42.0.1:1234
+    3. Follow the setup wizard to install easeOS
+
+💻 CLI INSTALLER (ALTERNATIVE)
+    sudo easyos-install               Launch CLI installer
+    sudo nmtui                        Configure network first
 
 INSTALLER FEATURES
+    • Guided web wizard OR traditional CLI
     • Automatic disk partitioning with Btrfs
     • Optional TPM2-backed LUKS encryption
     • QR code display for recovery keys
-  • Network connectivity verification (prompts for nmtui if offline)
     • Update channel selection (stable/beta/preview)
 
 SYSTEM INFORMATION
@@ -186,30 +193,12 @@ NETWORK SETUP
 TROUBLESHOOTING
     journalctl -b                       View boot logs
     journalctl -f                       Follow live logs
+    journalctl -u easyos-hotspot        Hotspot service logs
+    journalctl -u easyos-webui          Web UI service logs
     dmesg                               Kernel messages
-    cat /tmp/easyos-install.log         Installer log (after install)
 
 DOCUMENTATION
-    README: /etc/nixos/easyos/README.md
     GitHub: https://github.com/doughty247/easyos
-
-POST-INSTALL FEATURES
-  • Open Wi‑Fi hotspot (no WPA) with captive portal
-    - SSID: easeOS-Setup (always visible, no hidden SSID)
-    - Captive portal: http://10.42.0.1:1234 (single client)
-    - Walled garden: No WAN access by default (set hotspotAllowWAN: true to enable)
-    - Client isolation: Prevents hotspot clients from seeing each other
-    - mDNS blocked: Reduces device discovery on hotspot subnet
-  • Web UI at http://<ip>:1234 for config and nixos-rebuild
-  • Router-grade NAT, DHCP/DNS via NetworkManager
-  • CAKE QoS with network auto-profiling + BBR congestion control
-  • Automatic Btrfs snapshots & backups
-
-SECURITY NOTES
-  • Hotspot captive portal bound to 10.42.0.1 only (not exposed on WAN/LAN)
-  • Firewall permits DNS/DHCP/HTTP only from hotspot subnet (10.42.0.0/24)
-  • TPM2-backed LUKS encryption with PCR7 + first-boot re-enrollment
-  • Recovery key QR code display during install for safe backup
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Type 'easy-help' anytime to see this message
@@ -217,7 +206,7 @@ EOF
               '')
             ];
 
-            # Auto-run installer on login
+            # Auto-start captive portal on login
             programs.bash.interactiveShellInit = ''
               # Show helpful tip on login
               echo ""
@@ -225,8 +214,8 @@ EOF
               echo ""
 
               # Only run once per boot
-              if [ ! -f /tmp/easyos-installer-run ]; then
-                touch /tmp/easyos-installer-run
+              if [ ! -f /tmp/easyos-setup-run ]; then
+                touch /tmp/easyos-setup-run
 
                 # Enable WiFi if no ethernet connected
                 ETH_CONNECTED=$(nmcli -t -f TYPE,STATE device 2>/dev/null | grep -c '^ethernet:connected$' || true)
@@ -235,7 +224,7 @@ EOF
                   echo "✓ Ethernet connection detected"
                   nmcli radio wifi off 2>/dev/null || true
                 else
-                  echo "No ethernet detected - WiFi enabled for setup"
+                  echo "No ethernet detected - enabling WiFi for setup hotspot..."
                   if [ -f /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf ]; then
                     sudo mv /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf \
                        /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf.disabled 2>/dev/null || true
@@ -244,8 +233,47 @@ EOF
                   nmcli radio wifi on 2>/dev/null || true
                 fi
 
-                # Run installer with sudo
-                sudo /etc/easyos-install.sh
+                # Wait for hotspot service to initialize
+                echo ""
+                echo "Starting setup hotspot..."
+                sleep 3
+                
+                # Check if hotspot is running
+                HOTSPOT_ACTIVE=$(nmcli -t connection show --active 2>/dev/null | grep -c "easeOS-Setup" || true)
+                
+                if [ "''${HOTSPOT_ACTIVE}" -ge 1 ]; then
+                  echo ""
+                  echo "╔══════════════════════════════════════════════════════════════════╗"
+                  echo "║                    🌱 easeOS Setup Ready! 🌱                      ║"
+                  echo "╠══════════════════════════════════════════════════════════════════╣"
+                  echo "║                                                                   ║"
+                  echo "║  Connect to the Wi-Fi hotspot:                                   ║"
+                  echo "║    📶 SSID: easeOS-Setup (open, no password)                     ║"
+                  echo "║                                                                   ║"
+                  echo "║  Then open your browser to complete setup:                        ║"
+                  echo "║    🌐 http://10.42.0.1:1234                                       ║"
+                  echo "║                                                                   ║"
+                  echo "║  Or use the legacy CLI installer:                                 ║"
+                  echo "║    💻 sudo easyos-install                                         ║"
+                  echo "║                                                                   ║"
+                  echo "╚══════════════════════════════════════════════════════════════════╝"
+                  echo ""
+                else
+                  # No hotspot (maybe no WiFi hardware) - offer CLI installer
+                  echo ""
+                  echo "╔══════════════════════════════════════════════════════════════════╗"
+                  echo "║                    🌱 easeOS Setup 🌱                             ║"
+                  echo "╠══════════════════════════════════════════════════════════════════╣"
+                  echo "║                                                                   ║"
+                  echo "║  No Wi-Fi hotspot available. Use the CLI installer:              ║"
+                  echo "║    💻 sudo easyos-install                                         ║"
+                  echo "║                                                                   ║"
+                  echo "║  Or configure network first:                                      ║"
+                  echo "║    📶 sudo nmtui                                                  ║"
+                  echo "║                                                                   ║"
+                  echo "╚══════════════════════════════════════════════════════════════════╝"
+                  echo ""
+                fi
               fi
             '';
 

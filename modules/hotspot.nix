@@ -37,6 +37,9 @@ let
   # Hotspot activates for: first-run, guest, OR greenhouse mode
   hotspotEnabled = (mode == "first-run") || (mode == "guest") || (mode == "greenhouse");
   captivePort = 1234;
+  
+  # ISO mode detection: check for marker file created by flake.nix ISO configuration
+  isISOMode = builtins.pathExists "/etc/easy/iso-mode";
 in {
   options.easyos.hotspot.enable = lib.mkOption {
     type = lib.types.bool;
@@ -73,11 +76,9 @@ in {
       after = [ "NetworkManager.service" ];
       wants = [ "NetworkManager.service" ];
       
-      # Only run on installed system, not in live ISO
-      # We gate on a marker file created by the installer: /etc/easy/installed
-      unitConfig = {
-        ConditionPathExists = [ "/etc/easy/installed" ];
-      };
+      # Run on EITHER installed system OR live ISO (for setup wizard)
+      # The script checks for the markers internally - no systemd condition needed
+      # This allows the service to start and handle both cases gracefully
       
       serviceConfig = {
         Type = "oneshot";
@@ -85,10 +86,16 @@ in {
       };
       
       script = ''
-        # Additional check: ensure we're on an installed system
-        if [ ! -f /etc/easy/installed ]; then
-          echo "Not running on installed system - skipping hotspot setup"
+        # Check we're on either installed system or ISO mode
+        if [ ! -f /etc/easy/installed ] && [ ! -f /etc/easy/iso-mode ]; then
+          echo "Not running on installed system or ISO - skipping hotspot setup"
           exit 0
+        fi
+        
+        IS_ISO=false
+        if [ -f /etc/easy/iso-mode ]; then
+          IS_ISO=true
+          echo "Running in ISO mode - starting captive portal for web-based setup"
         fi
         
         # Wait a bit for NetworkManager to be fully ready

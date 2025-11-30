@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="color-scheme" content="light">
+    <title>easeOS Setup</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'ease': {
+                            'leaf': '#22C55E',
+                            'mint': '#86EFAC',
+                            'sage': '#4ADE80',
+                            'forest': '#166534',
+                            'cream': '#F0FDF4',
+                            'soil': '#365314',
+                            'terracotta': '#EA580C',
+                        }
+                    },
+                    fontFamily: {
+                        'nunito': ['Nunito', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+        
+        /* Force light mode on all inputs */
+        input, textarea, select {
+            color-scheme: light !important;
+            -webkit-appearance: none;
+            appearance: none;
+            background-color: #ffffff !important;
+            color: #1f2937 !important;
+            -webkit-text-fill-color: #1f2937 !important;
+        }
+        
+        input::placeholder {
+            color: #9ca3af !important;
+            -webkit-text-fill-color: #9ca3af !important;
+        }
+        
+        /* Setup wizard container */
+        .setup-wizard {
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 50%, #bbf7d0 100%);
+            overflow: hidden;
+        }
+        
+        .setup-wizard::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: 
+                radial-gradient(circle at 20% 80%, rgba(134, 239, 172, 0.4) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(74, 222, 128, 0.3) 0%, transparent 50%);
+            pointer-events: none;
+        }
+        
+        /* Setup card */
+        .setup-card {
+            background: #ffffff;
+            border-radius: 32px;
+            box-shadow: 0 8px 32px rgba(34, 197, 94, 0.12), 0 4px 16px rgba(0, 0, 0, 0.06);
+            padding: 2.5rem;
+            max-width: 420px;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+            min-height: 480px;
+        }
+        
+        .setup-card-container {
+            position: relative;
+            width: 100%;
+            max-width: 420px;
+            overflow: hidden;
+            border-radius: 32px;
+        }
+        
+        /* Swipe transitions */
+        .swipe-enter { transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+        .swipe-leave { transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94); position: absolute; top: 0; left: 0; right: 0; width: 100%; }
+        .forward .swipe-enter-start { opacity: 0; transform: translateX(60px); }
+        .forward .swipe-enter-end { opacity: 1; transform: translateX(0); }
+        .forward .swipe-leave-start { opacity: 1; transform: translateX(0); }
+        .forward .swipe-leave-end { opacity: 0; transform: translateX(-60px); }
+        .back .swipe-enter-start { opacity: 0; transform: translateX(-60px); }
+        .back .swipe-enter-end { opacity: 1; transform: translateX(0); }
+        .back .swipe-leave-start { opacity: 1; transform: translateX(0); }
+        .back .swipe-leave-end { opacity: 0; transform: translateX(60px); }
+        
+        /* Buttons */
+        .setup-btn {
+            background: linear-gradient(to right, #22C55E, #4ADE80);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 1rem 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 14px rgba(34, 197, 94, 0.4);
+        }
+        .setup-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(34, 197, 94, 0.5); }
+        .setup-btn:active { transform: translateY(0); }
+        .setup-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        
+        .setup-btn-secondary {
+            background: transparent;
+            color: #22C55E;
+            border: 2px solid #22C55E;
+            border-radius: 12px;
+            padding: 0.875rem 1.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .setup-btn-secondary:hover { background: rgba(34, 197, 94, 0.1); }
+        
+        /* Progress steps */
+        .setup-progress { display: flex; justify-content: center; gap: 0.5rem; margin-bottom: 2rem; }
+        .setup-progress .step { width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; transition: all 0.3s ease; }
+        .setup-progress .step.active { background: #22C55E; width: 24px; border-radius: 4px; }
+        .setup-progress .step.completed { background: #86EFAC; }
+        
+        /* WiFi bubbles */
+        .wifi-bubble {
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid rgba(34, 197, 94, 0.2);
+            border-radius: 20px;
+            padding: 1rem 1.25rem;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .wifi-bubble:hover { border-color: rgba(34, 197, 94, 0.5); transform: translateY(-2px); }
+        .wifi-bubble.selected { border-color: #22C55E; background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(134, 239, 172, 0.1) 100%); }
+        .wifi-bubble .password-field { max-height: 0; opacity: 0; overflow: hidden; transition: all 0.3s ease; }
+        .wifi-bubble.selected .password-field { max-height: 100px; opacity: 1; margin-top: 1rem; }
+        
+        /* Signal bars */
+        .signal-bars { display: flex; gap: 2px; align-items: flex-end; height: 16px; }
+        .signal-bars .bar { width: 4px; background: #d1d5db; border-radius: 1px; }
+        .signal-bars .bar.active { background: #22C55E; }
+        .signal-bars .bar:nth-child(1) { height: 4px; }
+        .signal-bars .bar:nth-child(2) { height: 8px; }
+        .signal-bars .bar:nth-child(3) { height: 12px; }
+        .signal-bars .bar:nth-child(4) { height: 16px; }
+        
+        /* Loader */
+        .wifi-loader { display: flex; flex-direction: column; align-items: center; padding: 2rem 0; }
+        .wifi-loader .leaves { position: relative; width: 80px; height: 60px; }
+        .wifi-loader .leaf-left {
+            position: absolute; left: 10px; top: 10px; width: 25px; height: 40px;
+            background: linear-gradient(135deg, #22C55E 0%, #4ADE80 100%);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            transform-origin: bottom right;
+            animation: leafPartLeft 1.5s ease-in-out infinite;
+        }
+        .wifi-loader .leaf-right {
+            position: absolute; right: 10px; top: 10px; width: 25px; height: 40px;
+            background: linear-gradient(135deg, #4ADE80 0%, #22C55E 100%);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            transform-origin: bottom left;
+            animation: leafPartRight 1.5s ease-in-out infinite;
+        }
+        .wifi-loader .peek-dot {
+            position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+            width: 16px; height: 16px; background: #86EFAC; border-radius: 50%;
+            animation: leafPeek 1.5s ease-in-out infinite;
+            box-shadow: 0 0 12px rgba(134, 239, 172, 0.6);
+        }
+        .wifi-loader .stem { width: 4px; height: 20px; background: linear-gradient(to bottom, #22C55E, #166534); border-radius: 2px; margin-top: -5px; }
+        
+        @keyframes leafPartLeft { 0%, 100% { transform: rotate(-5deg) translateX(0); } 50% { transform: rotate(-25deg) translateX(-8px); } }
+        @keyframes leafPartRight { 0%, 100% { transform: rotate(5deg) translateX(0); } 50% { transform: rotate(25deg) translateX(8px); } }
+        @keyframes leafPeek { 0%, 100% { transform: translateY(0) scale(0.9); opacity: 0.7; } 50% { transform: translateY(-5px) scale(1); opacity: 1; } }
+        
+        /* Cooper alive glow */
+        @keyframes cooperAlive { 0%, 100% { filter: drop-shadow(0 0 20px rgba(34, 197, 94, 0.5)); } 50% { filter: drop-shadow(0 0 40px rgba(34, 197, 94, 0.8)); } }
+        .cooper-alive { animation: cooperAlive 2s ease-in-out infinite; }
+        
+        /* Plant drop animation */
+        @keyframes cooper-plant-drop {
+            0% { opacity: 0; transform: translateY(-80px) scale(0.9); }
+            70% { opacity: 1; transform: translateY(0) scaleY(0.85) scaleX(1.1); }
+            85% { transform: translateY(-4px) scaleY(1.02) scaleX(0.98); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-plant-drop { animation: cooper-plant-drop 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+        
+        /* Pot settle animation */
+        @keyframes pot-settle { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .animate-pot-settle { animation: pot-settle 0.4s ease-out forwards; }
+        
+        /* Scrollbar for network list */
+        .wifi-network-list { -webkit-overflow-scrolling: touch; }
+        .wifi-network-list::-webkit-scrollbar { width: 6px; }
+        .wifi-network-list::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); border-radius: 10px; }
+        .wifi-network-list::-webkit-scrollbar-thumb { background: #86EFAC; border-radius: 10px; }
+        
+        /* Drive cards */
+        .drive-card { background: rgba(255, 255, 255, 0.9); border: 2px solid #e5e7eb; border-radius: 16px; padding: 1rem; cursor: pointer; transition: all 0.2s ease; }
+        .drive-card:hover { border-color: #22C55E; box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15); }
+        .drive-card.selected { border-color: #22C55E; background: rgba(34, 197, 94, 0.08); }
+        .drive-card.has-warning.selected { border-color: #F59E0B; background: rgba(245, 158, 11, 0.08); }
+        
+        /* Mobile responsive */
+        @media (max-width: 640px) {
+            .setup-wizard {
+                padding: 1rem;
+                padding-top: 2.5rem;
+                padding-bottom: 1.5rem;
+            }
+            .setup-card {
+                padding: 1.75rem 1.5rem;
+                border-radius: 24px;
+                min-height: auto;
+                max-width: 100%;
+            }
+            .setup-card-container {
+                max-width: 100%;
+                border-radius: 24px;
+            }
+            .setup-btn {
+                padding: 1rem 1.5rem;
+                font-size: 1rem;
+            }
+            .setup-btn-secondary {
+                padding: 0.875rem 1.25rem;
+                font-size: 0.9rem;
+            }
+            .wifi-bubble, .drive-card {
+                padding: 0.875rem;
+            }
+            .setup-progress {
+                margin-bottom: 1.5rem;
+            }
+            h2 {
+                font-size: 1.35rem !important;
+            }
+        }
+        
+        /* Reduce motion */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+        }
+    </style>
+</head>
+<body class="font-nunito min-h-screen overflow-hidden" x-data="setupWizard()" x-init="init()">
+    
+    <div class="setup-wizard">
+        <!-- Test Mode Banner -->
+        <div x-show="testMode" class="fixed top-0 left-0 right-0 bg-amber-500 text-white text-center py-1 text-xs font-bold z-50">
+            TEST MODE - Changes won't persist
+        </div>
+        
+        <div class="setup-card-container" :class="transitionDirection">
+        
+            <!-- Step 1: Wake Up -->
+            <div x-show="step === 'wake'" 
+                 x-transition:enter="swipe-enter" x-transition:enter-start="swipe-enter-start" x-transition:enter-end="swipe-enter-end"
+                 x-transition:leave="swipe-leave" x-transition:leave-start="swipe-leave-start" x-transition:leave-end="swipe-leave-end"
+                 class="setup-card text-center">
+                <div class="setup-progress">
+                    <div class="step active"></div><div class="step"></div><div class="step"></div><div class="step"></div><div class="step"></div><div class="step"></div><div class="step"></div>
+                </div>
+                
+                <!-- Empty Pot -->
+                <div class="w-32 h-32 mx-auto mb-8 mt-8" :class="{ 'animate-pot-settle': cooperDropped }">
+                    <svg viewBox="0 0 100 100" class="w-full h-full">
+                        <path d="M30 75 L35 92 L65 92 L70 75 Z" fill="#EA580C"/>
+                        <path d="M25 70 L75 70 L75 77 L25 77 Z" fill="#C2410C" rx="3"/>
+                        <ellipse cx="50" cy="73" rx="25" ry="3" fill="#EA580C"/>
+                        <ellipse cx="50" cy="71" rx="20" ry="5" fill="#365314"/>
+                        <ellipse cx="50" cy="68" rx="12" ry="3" fill="#3F6212" opacity="0.7"/>
+                    </svg>
+                </div>
+                
+                <h1 class="text-2xl font-extrabold text-ease-forest mb-3">Hello. Let's get growing.</h1>
+                <p class="text-ease-soil mb-8">This is Cooper's pot. Let's set up his new home in your network.</p>
+                
+                <button @click="goToStep('account')" class="setup-btn">Start Planting</button>
+            </div>
+            
+            <!-- Step 2: Account -->
+            <div x-show="step === 'account'" 
+                 x-transition:enter="swipe-enter" x-transition:enter-start="swipe-enter-start" x-transition:enter-end="swipe-enter-end"
+                 x-transition:leave="swipe-leave" x-transition:leave-start="swipe-leave-start" x-transition:leave-end="swipe-leave-end"
+                 class="setup-card text-center">
+                <div class="setup-progress">
+                    <div class="step completed"></div><div class="step active"></div><div class="step"></div><div class="step"></div><div class="step"></div><div class="step"></div><div class="step"></div>
+                </div>
+                
+                <h2 class="text-xl font-bold text-ease-forest mb-2">Who's the gardener?</h2>
+                <p class="text-ease-soil text-sm mb-6">Name your garden and create your login</p>
+                
+                <div class="space-y-4 mb-6 text-left">
+                    <div>
+                        <label class="block text-sm font-semibold text-ease-forest mb-2">Garden Name</label>
+                        <input type="text" x-model="hostname" placeholder="easeos"
+                               class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-2 focus:ring-ease-leaf/20 outline-none">
+                        <p class="text-xs text-gray-500 mt-1">Your system's network name</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-ease-forest mb-2">Username</label>
+                        <input type="text" x-model="username" placeholder="gardener" autocomplete="username"
+                               class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-ease-leaf focus:ring-2 focus:ring-ease-leaf/20 outline-none"
+                               :class="{ 'border-red-300': usernameError }">
+                        <p class="text-xs text-gray-500 mt-1">This will be your admin login</p>
+                        <p x-show="usernameError" class="text-xs text-red-500 mt-1" x-text="usernameError"></p>
+                    </div>
+                </div>
+                
+                <button @click="validateUsername()" :disabled="!username" class="setup-btn">Continue</button>
+                <button @click="goToStep('wake')" class="setup-btn-secondary w-full mt-2">&larr; Go Back</button>
+            </div>
+            
+            <!-- Step 3: Password -->
+            <div x-show="step === 'password'" 
+                 x-transition:enter="swipe-enter" x-transition:enter-start="swipe-enter-start" x-transition:enter-end="swipe-enter-end"
+                 x-transition:leave="swipe-leave" x-transition:leave-start="swipe-leave-start" x-transition:leave-end="swipe-leave-end"
+                 class="setup-card text-center">
+                <div class="setup-progress">
+                    <div class="step completed"></div><div class="step completed"></div><div class="step active"></div><div class="step"></div><div class="step"></div><div class="step"></div><div class="step"></div>
+                </div>
+                
+                <h2 class="text-xl font-bold text-ease-forest mb-2">Secure your garden</h2>
+                <p class="text-ease-soil text-sm mb-6">Choose a password for <span class="font-semibold" x-text="username"></span></p>
+                
+                <div class="space-y-4 mb-6 text-left">
+                    <div>
+                        <label class="block text-sm font-semibold text-ease-forest mb-2">Password</label>
+                        <input type="password" x-model="password" placeholder="Choose a strong password" autocomplete="new-password"
+                               class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-ease-leaf outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-ease-forest mb-2">Confirm Password</label>
+                        <input type="password" x-model="passwordConfirm" placeholder="Type it again" autocomplete="new-password"
+                               class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-ease-leaf outline-none"
+                               :class="{ 'border-red-300': passwordConfirm && password !== passwordConfirm }">
+                        <p x-show="passwordConfirm && password !== passwordConfirm" class="text-xs text-red-500 mt-1">Passwords don't match</p>
+                    </div>
+                </div>
+                
+                <p x-show="accountError" class="text-red-500 text-sm mb-4" x-text="accountError"></p>
+                
+                <button @click="validatePassword()" :disabled="!password || password !== passwordConfirm" class="setup-btn">Continue</button>
+                <button @click="goToStep('account')" class="setup-btn-secondary w-full mt-2">&larr; Go Back</button>
+            </div>
+            
+            <!-- Step 4: Storage (ISO only) -->
+            <div x-show="step === 'storage'" 
+                 x-transition:enter="swipe-enter" x-transition:enter-start="swipe-enter-start" x-transition:enter-end="swipe-enter-end"
+                 x-transition:leave="swipe-leave" x-transition:leave-start="swipe-leave-start" x-transition:leave-end="swipe-leave-end"
+                 class="setup-card">
+                <div class="setup-progress">
+                    <div class="step completed"></div><div class="step completed"></div><div class="step completed"></div><div class="step active"></div><div class="step"></div><div class="step"></div><div class="step"></div>
+                </div>
+                
+                <h2 class="text-xl font-bold text-ease-forest mb-2 text-center">Pick a garden bed</h2>
+                <p class="text-ease-soil text-sm mb-6 text-center">Choose where to plant Cooper</p>
+                
+                <div x-show="storageLoading" class="text-center py-8">
+                    <div class="wifi-loader">
+                        <div class="leaves"><div class="leaf-left"></div><div class="leaf-right"></div><div class="peek-dot"></div></div>
+                        <div class="stem"></div>
+                    </div>
+                    <p class="text-ease-sage text-sm mt-4">Inspecting the soil...</p>
+                </div>
+                
+                <!-- No drives found -->
+                <div x-show="!storageLoading && storageDevices.length === 0 && !storageError" class="text-center py-8">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-amber-100 rounded-full flex items-center justify-center">
+                        <svg class="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2">No storage drives found</h3>
+                    <p class="text-sm text-gray-600 mb-4">Make sure a USB drive or SSD is connected to Cooper.</p>
+                    <button @click="scanStorageDevices()" class="setup-btn-secondary">
+                        Scan Again
+                    </button>
+                </div>
+                
+                <!-- Error state -->
+                <div x-show="!storageLoading && storageError" class="text-center py-8">
+                    <div class="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-semibold text-gray-800 mb-2">Couldn't detect storage</h3>
+                    <p class="text-sm text-gray-600 mb-2" x-text="storageError"></p>
+                    <button @click="scanStorageDevices()" class="setup-btn-secondary">
+                        Try Again
+                    </button>
+                </div>
+                
+                <div x-show="!storageLoading && storageDevices.length > 0" class="space-y-3 mb-6 max-h-64 overflow-y-auto">
+                    <template x-for="drive in storageDevices" :key="drive.path">
+                        <div class="drive-card" :class="{ 'selected': selectedDrive === drive.path, 'has-warning': drive.hasData }" @click="selectDrive(drive)">
+                            <div class="flex items-center gap-4">
+                                <div class="w-10 h-10 bg-ease-cream rounded-lg flex items-center justify-center">
+                                    <svg class="w-6 h-6 text-ease-forest" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-semibold text-gray-800" x-text="drive.model || 'Storage Drive'"></p>
+                                    <p class="text-sm text-gray-500"><span x-text="drive.size"></span> • <span class="font-mono" x-text="drive.path"></span></p>
+                                </div>
+                            </div>
+                            <div x-show="drive.hasData" class="mt-2 text-xs text-amber-600">Warning: Contains existing data</div>
+                        </div>
+                    </template>
+                </div>
+                
+                <button x-show="!storageLoading && storageDevices.length > 0" @click="confirmStorage()" :disabled="!selectedDrive" class="setup-btn">
+                    <span x-show="!selectedDriveHasData">Plant Here</span>
+                    <span x-show="selectedDriveHasData">Clear & Plant</span>
+                </button>
+                <button x-show="!storageLoading" @click="goToStep('password')" class="setup-btn-secondary w-full mt-2">&larr; Go Back</button>
+            </div>
+            
+            <!-- Step 5: WiFi -->
+            <div x-show="step === 'soil'" 
+                 x-transition:enter="swipe-enter" x-transition:enter-start="swipe-enter-start" x-transition:enter-end="swipe-enter-end"
+                 x-transition:leave="swipe-leave" x-transition:leave-start="swipe-leave-start" x-transition:leave-end="swipe-leave-end"
+                 class="setup-card">
+                <div class="setup-progress">
+                    <div class="step completed"></div><div class="step completed"></div><div class="step completed"></div><div class="step completed"></div><div class="step active"></div><div class="step"></div><div class="step"></div>
+                </div>
+                
+                <h2 class="text-xl font-bold text-ease-forest mb-2 text-center">Where are we planting?</h2>
+                <p class="text-ease-soil text-sm mb-6 text-center">Choose your home WiFi network</p>
+                
+                <div x-show="wifiScanning" class="wifi-loader">
+                    <div class="leaves"><div class="leaf-left"></div><div class="leaf-right"></div><div class="peek-dot"></div></div>
+                    <div class="stem"></div>
+                    <p class="text-ease-sage text-sm mt-4">Scanning for networks...</p>
+                </div>
+                
+                <div x-show="!wifiScanning" class="wifi-network-list space-y-3 mb-4 max-h-64 overflow-y-auto">
+                    <template x-for="network in wifiNetworks" :key="network.ssid">
+                        <div class="wifi-bubble" :class="{ 'selected': selectedNetwork === network.ssid }" @click="selectNetwork(network.ssid)">
+                            <div class="flex items-center justify-between">
+                                <span class="font-semibold text-gray-800" x-text="network.ssid"></span>
+                                <div class="signal-bars">
+                                    <div class="bar" :class="{ 'active': network.signal >= 25 }"></div>
+                                    <div class="bar" :class="{ 'active': network.signal >= 50 }"></div>
+                                    <div class="bar" :class="{ 'active': network.signal >= 75 }"></div>
+                                    <div class="bar" :class="{ 'active': network.signal >= 90 }"></div>
+                                </div>
+                            </div>
+                            <div class="password-field">
+                                <input type="password" x-model="wifiPassword" @click.stop placeholder="Enter WiFi password"
+                                       class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-ease-leaf outline-none">
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                
+                <button x-show="!wifiScanning" @click="startGermination()" :disabled="!selectedNetwork || !wifiPassword" class="setup-btn">Plant Here</button>
+                <button x-show="!wifiScanning" @click="goToStep('storage')" class="setup-btn-secondary w-full mt-2">&larr; Go Back</button>
+            </div>
+            
+            <!-- Step 6: Germination -->
+            <div x-show="step === 'germinate'" 
+                 x-transition:enter="swipe-enter" x-transition:enter-start="swipe-enter-start" x-transition:enter-end="swipe-enter-end"
+                 class="setup-card text-center">
+                <div class="setup-progress">
+                    <div class="step completed"></div><div class="step completed"></div><div class="step completed"></div><div class="step completed"></div><div class="step completed"></div><div class="step active"></div><div class="step"></div>
+                </div>
+                
+                <div class="w-40 h-40 mx-auto mb-6">
+                    <svg viewBox="0 0 100 100" class="w-full h-full">
+                        <path d="M30 75 L35 92 L65 92 L70 75 Z" fill="#EA580C"/>
+                        <path d="M25 70 L75 70 L75 77 L25 77 Z" fill="#C2410C"/>
+                        <ellipse cx="50" cy="73" rx="25" ry="3" fill="#EA580C"/>
+                        <ellipse cx="50" cy="71" rx="20" ry="4" fill="#365314"/>
+                        <g class="sprout"><ellipse cx="50" cy="60" rx="4" ry="8" fill="#22C55E"/></g>
+                    </svg>
+                </div>
+                
+                <h2 class="text-xl font-bold text-ease-forest mb-4" x-text="germinationStatus"></h2>
+                <div class="w-full h-2 bg-gray-200 rounded-full overflow-hidden mb-4">
+                    <div class="h-full bg-gradient-to-r from-ease-leaf to-ease-sage rounded-full transition-all duration-500" :style="'width: ' + germinationProgress + '%'"></div>
+                </div>
+                <p class="text-ease-soil text-sm" x-text="germinationDetail"></p>
+                
+                <p x-show="germinationError" class="text-red-500 text-sm mt-4" x-text="germinationError"></p>
+                <button x-show="germinationError" @click="goToStep('soil')" class="setup-btn mt-4">Try Again</button>
+                <p x-show="testMode && !germinationError" class="text-xs text-amber-600 mt-4">Test mode: WiFi connection is simulated</p>
+            </div>
+            
+            <!-- Step 7: Alive -->
+            <div x-show="step === 'alive'" class="setup-card text-center">
+                <div class="setup-progress">
+                    <div class="step completed"></div><div class="step completed"></div><div class="step completed"></div><div class="step completed"></div><div class="step completed"></div><div class="step completed"></div><div class="step completed"></div>
+                </div>
+                
+                <div class="w-40 h-40 mx-auto mb-6 cooper-alive">
+                    <svg viewBox="0 0 100 100" class="w-full h-full">
+                        <path d="M30 75 L35 92 L65 92 L70 75 Z" fill="#EA580C"/>
+                        <path d="M25 70 L75 70 L75 77 L25 77 Z" fill="#C2410C"/>
+                        <ellipse cx="50" cy="73" rx="25" ry="3" fill="#EA580C"/>
+                        <ellipse cx="50" cy="71" rx="20" ry="4" fill="#365314"/>
+                        <g class="animate-plant-drop" style="transform-origin: 50px 71px;">
+                            <ellipse cx="35" cy="50" rx="8" ry="18" fill="#4ADE80" transform="rotate(-35 35 50)"/>
+                            <ellipse cx="65" cy="50" rx="8" ry="18" fill="#4ADE80" transform="rotate(35 65 50)"/>
+                            <ellipse cx="42" cy="55" rx="9" ry="20" fill="#22C55E" transform="rotate(-15 42 55)"/>
+                            <ellipse cx="58" cy="55" rx="9" ry="20" fill="#22C55E" transform="rotate(15 58 55)"/>
+                            <ellipse cx="50" cy="52" rx="8" ry="22" fill="#16A34A"/>
+                            <ellipse cx="50" cy="45" rx="5" ry="12" fill="#BBF7D0" opacity="0.85"/>
+                            <path d="M42 52 Q45 48 48 52" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
+                            <path d="M52 52 Q55 48 58 52" stroke="#1a1a1a" stroke-width="2" fill="none" stroke-linecap="round"/>
+                            <ellipse cx="40" cy="56" rx="3" ry="2" fill="#FDA4AF" opacity="0.9"/>
+                            <ellipse cx="60" cy="56" rx="3" ry="2" fill="#FDA4AF" opacity="0.9"/>
+                            <path d="M46 58 Q50 64 54 58" stroke="#1a1a1a" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+                        </g>
+                    </svg>
+                </div>
+                
+                <div x-show="isISOMode">
+                    <h1 class="text-2xl font-extrabold text-ease-forest mb-2">Cooper is Planted!</h1>
+                    <p class="text-ease-soil mb-4">Installation complete! Remove the USB and reboot.</p>
+                    <button @click="rebootSystem()" class="setup-btn">Reboot Now</button>
+                </div>
+                
+                <div x-show="!isISOMode">
+                    <h1 class="text-2xl font-extrabold text-ease-forest mb-2">Cooper is Alive!</h1>
+                    <p class="text-ease-soil mb-2">Your garden is planted and thriving.</p>
+                    <p class="text-sm text-gray-500 mb-6">Look at Cooper — the LED should be <span class="text-ease-leaf font-bold">green</span> now.</p>
+                    <button @click="completeSetup()" class="setup-btn">Enter My Garden</button>
+                    <p class="text-xs text-gray-400 mt-4">Access easeOS at <span class="font-mono text-ease-forest" x-text="'http://' + ipAddress + ':1234'"></span></p>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+    
+    <script>
+        function setupWizard() {
+            return {
+                step: 'wake',
+                transitionDirection: 'forward',
+                testMode: false,
+                isISOMode: false,
+                cooperDropped: false,
+                ipAddress: '',
+                
+                // Account
+                username: '',
+                password: '',
+                passwordConfirm: '',
+                hostname: '',
+                usernameError: null,
+                accountError: null,
+                
+                // Storage
+                storageDevices: [],
+                storageLoading: true,
+                storageError: null,
+                selectedDrive: null,
+
+                // WiFi
+                wifiNetworks: [],
+                wifiScanning: false,
+                selectedNetwork: null,
+                wifiPassword: '',
+                encryptionKey: null,
+                
+                // Germination
+                germinationProgress: 0,
+                germinationStatus: 'Rooting...',
+                germinationDetail: 'Finding nutrients in the soil',
+                germinationError: null,
+                
+                get selectedDriveHasData() {
+                    const drive = this.storageDevices.find(d => d.path === this.selectedDrive);
+                    return drive ? drive.hasData : false;
+                },
+                
+                async init() {
+                    this.ipAddress = window.location.hostname;
+                    this.testMode = window.location.port === '8089';
+                    
+                    // Keyboard scroll fix
+                    window.addEventListener('resize', () => {
+                        const active = document.activeElement;
+                        if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+                            setTimeout(() => active.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+                        }
+                    });
+                    
+                    // Check ISO mode
+                    try {
+                        const res = await fetch('/api/system/info');
+                        if (res.ok) {
+                            const info = await res.json();
+                            this.isISOMode = info.isISO || false;
+                        }
+                    } catch (e) {}
+                    
+                    // Drop in animation
+                    setTimeout(() => this.cooperDropped = true, 300);
+                },
+                
+                goToStep(step) {
+                    const steps = ['wake', 'account', 'password', 'storage', 'soil', 'germinate', 'alive'];
+                    this.transitionDirection = steps.indexOf(step) > steps.indexOf(this.step) ? 'forward' : 'back';
+                    this.step = step;
+                },
+                
+                validateUsername() {
+                    this.usernameError = null;
+                    if (!this.username || this.username.length < 3) {
+                        this.usernameError = 'Username must be at least 3 characters';
+                        return;
+                    }
+                    if (!/^[a-z][a-z0-9_-]*$/.test(this.username)) {
+                        this.usernameError = 'Must start with a letter, only lowercase, numbers, - or _';
+                        return;
+                    }
+                    if (!this.hostname) this.hostname = 'easeos';
+                    this.goToStep('password');
+                },
+                
+                validatePassword() {
+                    this.accountError = null;
+                    if (!this.password || this.password.length < 6) {
+                        this.accountError = 'Password must be at least 6 characters';
+                        return;
+                    }
+                    if (this.password !== this.passwordConfirm) {
+                        this.accountError = 'Passwords do not match';
+                        return;
+                    }
+                    
+                    if (this.isISOMode) {
+                        this.goToStep('storage');
+                        this.scanStorageDevices();
+                    } else {
+                        this.goToStep('soil');
+                        this.scanWifiNetworks();
+                    }
+                },
+                
+                async scanStorageDevices() {
+                    this.storageLoading = true;
+                    this.storageError = null;
+                    this.storageDevices = [];
+                    this.selectedDrive = null;
+                    try {
+                        const res = await fetch('/api/storage/detect');
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.storageDevices = data.drives || [];
+                            if (this.storageDevices.length === 1) {
+                                this.selectedDrive = this.storageDevices[0].path;
+                            }
+                        } else {
+                            this.storageError = 'Failed to scan storage devices';
+                        }
+                    } catch (e) {
+                        console.error('Storage scan failed:', e);
+                        this.storageError = 'Connection error while scanning';
+                    }
+                    this.storageLoading = false;
+                },
+                
+                selectDrive(drive) {
+                    this.selectedDrive = this.selectedDrive === drive.path ? null : drive.path;
+                },
+                
+                confirmStorage() {
+                    if (!this.selectedDrive) return;
+                    this.goToStep('soil');
+                    this.scanWifiNetworks();
+                },
+                
+                cryptoAvailable() {
+                    return typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined' && window.isSecureContext;
+                },
+                
+                async fetchEncryptionKey() {
+                    if (!this.cryptoAvailable()) return null;
+                    try {
+                        const res = await fetch('/api/crypto/session');
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.encryptionKey = data.key;
+                            return data.key;
+                        }
+                    } catch (e) {}
+                    return null;
+                },
+                
+                async deriveAESKey(secret) {
+                    if (!this.cryptoAvailable()) return null;
+                    const encoder = new TextEncoder();
+                    const keyMaterial = await crypto.subtle.importKey('raw', encoder.encode(secret), 'PBKDF2', false, ['deriveKey']);
+                    return await crypto.subtle.deriveKey(
+                        { name: 'PBKDF2', salt: encoder.encode('easeOS-wifi-salt'), iterations: 100000, hash: 'SHA-256' },
+                        keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+                    );
+                },
+                
+                async encryptData(data, keyString) {
+                    if (!keyString || !this.cryptoAvailable()) return null;
+                    try {
+                        const key = await this.deriveAESKey(keyString);
+                        if (!key) return null;
+                        const encoder = new TextEncoder();
+                        const iv = crypto.getRandomValues(new Uint8Array(12));
+                        const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(JSON.stringify(data)));
+                        const combined = new Uint8Array(iv.length + encrypted.byteLength);
+                        combined.set(iv);
+                        combined.set(new Uint8Array(encrypted), iv.length);
+                        return btoa(String.fromCharCode(...combined));
+                    } catch (e) { return null; }
+                },
+                
+                async decryptData(encryptedBase64, keyString) {
+                    if (!keyString || !encryptedBase64 || !this.cryptoAvailable()) return null;
+                    try {
+                        const key = await this.deriveAESKey(keyString);
+                        if (!key) return null;
+                        const combined = Uint8Array.from(atob(encryptedBase64), c => c.charCodeAt(0));
+                        const iv = combined.slice(0, 12);
+                        const ciphertext = combined.slice(12);
+                        const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+                        return JSON.parse(new TextDecoder().decode(decrypted));
+                    } catch (e) { return null; }
+                },
+                
+                async scanWifiNetworks() {
+                    this.wifiScanning = true;
+                    this.wifiNetworks = [];
+                    
+                    try {
+                        const cryptoOk = this.cryptoAvailable();
+                        if (cryptoOk) await this.fetchEncryptionKey();
+                        
+                        const url = cryptoOk ? '/api/wifi/scan' : '/api/wifi/scan?plain=1';
+                        const res = await fetch(url);
+                        
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.encrypted && this.encryptionKey && cryptoOk) {
+                                const decrypted = await this.decryptData(data.data, this.encryptionKey);
+                                if (decrypted && Array.isArray(decrypted)) {
+                                    this.wifiNetworks = decrypted.sort((a, b) => b.signal - a.signal);
+                                }
+                            } else if (Array.isArray(data)) {
+                                this.wifiNetworks = data.sort((a, b) => b.signal - a.signal);
+                            } else if (data.networks) {
+                                this.wifiNetworks = data.networks.sort((a, b) => b.signal - a.signal);
+                            }
+                        }
+                    } catch (e) { console.error('WiFi scan failed:', e); }
+                    
+                    this.wifiScanning = false;
+                },
+                
+                selectNetwork(ssid) {
+                    if (this.selectedNetwork === ssid) {
+                        this.selectedNetwork = null;
+                        this.wifiPassword = '';
+                    } else {
+                        this.selectedNetwork = ssid;
+                        this.wifiPassword = '';
+                        this.$nextTick(() => {
+                            setTimeout(() => {
+                                const input = document.querySelector('.wifi-bubble.selected .password-field input');
+                                if (input) input.focus();
+                            }, 350);
+                        });
+                    }
+                },
+                
+                async startGermination() {
+                    if (!this.selectedNetwork || !this.wifiPassword) return;
+                    
+                    this.step = 'germinate';
+                    this.germinationProgress = 0;
+                    this.germinationError = null;
+                    
+                    const stages = [
+                        { progress: 10, status: 'Rooting...', detail: 'Finding nutrients' },
+                        { progress: 25, status: 'Germinating...', detail: 'Creating account' },
+                        { progress: 40, status: 'Sprouting...', detail: 'Encrypting credentials' },
+                        { progress: 55, status: 'Growing...', detail: 'Connecting to ' + this.selectedNetwork },
+                        { progress: 75, status: 'Blossoming...', detail: 'Establishing connection' },
+                        { progress: 90, status: 'Almost there...', detail: 'Configuring system' },
+                    ];
+                    
+                    try {
+                        // Stage 1
+                        this.germinationProgress = stages[0].progress;
+                        this.germinationStatus = stages[0].status;
+                        this.germinationDetail = stages[0].detail;
+                        await this.sleep(500);
+                        
+                        // Create account
+                        this.germinationProgress = stages[1].progress;
+                        this.germinationStatus = stages[1].status;
+                        this.germinationDetail = stages[1].detail;
+                        
+                        const accountData = { username: this.username, password: this.password, hostname: this.hostname || 'easeos' };
+                        let accountBody;
+                        if (this.encryptionKey) {
+                            const encrypted = await this.encryptData(accountData, this.encryptionKey);
+                            accountBody = JSON.stringify({ encrypted: true, data: encrypted });
+                        } else {
+                            accountBody = JSON.stringify(accountData);
+                        }
+                        
+                        const accountRes = await fetch('/api/setup/account', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: accountBody
+                        });
+                        if (!accountRes.ok) throw new Error(await accountRes.text() || 'Failed to create account');
+                        
+                        // Encrypt WiFi
+                        this.germinationProgress = stages[2].progress;
+                        this.germinationStatus = stages[2].status;
+                        this.germinationDetail = stages[2].detail;
+                        
+                        const wifiData = { ssid: this.selectedNetwork, password: this.wifiPassword };
+                        let wifiBody;
+                        if (this.encryptionKey) {
+                            const encrypted = await this.encryptData(wifiData, this.encryptionKey);
+                            wifiBody = JSON.stringify({ encrypted: true, data: encrypted });
+                        } else {
+                            wifiBody = JSON.stringify(wifiData);
+                        }
+                        
+                        await this.sleep(400);
+                        
+                        // Connect WiFi
+                        this.germinationProgress = stages[3].progress;
+                        this.germinationStatus = stages[3].status;
+                        this.germinationDetail = stages[3].detail;
+                        
+                        const wifiRes = await fetch('/api/wifi/connect', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: wifiBody
+                        });
+                        if (!wifiRes.ok) throw new Error(await wifiRes.text() || 'WiFi connection failed');
+                        
+                        const wifiResult = await wifiRes.json();
+                        if (!wifiResult.success) throw new Error(wifiResult.error || 'WiFi connection failed');
+                        
+                        // Finalize
+                        this.germinationProgress = stages[4].progress;
+                        this.germinationStatus = stages[4].status;
+                        this.germinationDetail = stages[4].detail;
+                        await this.sleep(500);
+                        
+                        // Complete
+                        this.germinationProgress = 100;
+                        this.germinationStatus = 'Planted!';
+                        this.germinationDetail = 'Cooper is taking root';
+                        await this.sleep(1000);
+                        this.step = 'alive';
+                        
+                    } catch (e) {
+                        console.error('Setup failed:', e);
+                        this.germinationError = e.message || 'Something went wrong';
+                        this.germinationStatus = 'Wilted...';
+                        this.germinationDetail = 'Setup failed';
+                    }
+                },
+                
+                async completeSetup() {
+                    try {
+                        // Get current config
+                        const configRes = await fetch('/api/config');
+                        let config = {};
+                        if (configRes.ok) config = await configRes.json();
+                        
+                        // Update mode to normal
+                        config.mode = 'normal';
+                        
+                        await fetch('/api/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(config)
+                        });
+                        
+                        // Redirect to main UI
+                        window.location.href = '/';
+                    } catch (e) {
+                        console.error('Failed to complete setup:', e);
+                        window.location.href = '/';
+                    }
+                },
+                
+                async rebootSystem() {
+                    try {
+                        await fetch('/api/system/reboot', { method: 'POST' });
+                    } catch (e) {}
+                    this.germinationStatus = 'Rebooting...';
+                    this.germinationDetail = 'See you on the other side!';
+                },
+                
+                sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+            };
+        }
+    </script>
+</body>
+</html>

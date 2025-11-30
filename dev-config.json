@@ -1,4 +1,5 @@
 {
+  "mode": "first-run",
   "apps": {
     "immich": {
       "enable": false
@@ -7,13 +8,21 @@
       "enable": false
     },
     "vaultwarden": {
-      "enable": true
+      "enable": false
     },
     "jellyfin": {
+      "enable": false
+    },
+    "homeassistant": {
       "enable": false
     }
   },
   "backup": {
     "enable": true
+  },
+  "admin": {
+    "username": "rhserhrseh",
+    "hostname": "srsdrg",
+    "created": true
   }
 }
