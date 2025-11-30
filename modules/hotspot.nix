@@ -97,17 +97,6 @@ in {
           IS_ISO=true
           echo "Running in ISO mode - starting captive portal for web-based setup"
           
-          # In ISO mode, WiFi may be set as "unmanaged" by default
-          # We need to enable it before we can create the hotspot
-          if [ -f /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf ]; then
-            echo "Enabling WiFi management for hotspot..."
-            mv /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf \
-               /etc/NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf.disabled 2>/dev/null || true
-            # Reload NetworkManager to pick up the change
-            ${pkgs.systemd}/bin/systemctl reload NetworkManager 2>/dev/null || true
-            sleep 2
-          fi
-          
           # Ensure WiFi radio is on
           ${pkgs.networkmanager}/bin/nmcli radio wifi on 2>/dev/null || true
         fi

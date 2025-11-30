@@ -120,14 +120,8 @@
             systemd.network.enable = lib.mkForce false;
             networking.wireless.enable = false;
 
-            # Keep WiFi unmanaged by default; re-enable dynamically at login
-            environment.etc."NetworkManager/conf.d/10-easyos-unmanaged-wifi.conf" = {
-              text = ''
-                [keyfile]
-                unmanaged-devices=type:wifi
-              '';
-              mode = "0644";
-            };
+            # WiFi is managed by NetworkManager for hotspot setup
+            # No unmanaged-wifi config needed - hotspot service handles it
 
             # Autologin to nixos user
             services.getty.autologinUser = lib.mkForce "nixos";
