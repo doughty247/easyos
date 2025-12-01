@@ -80,6 +80,8 @@ in {
       # The script checks for the markers internally - no systemd condition needed
       # This allows the service to start and handle both cases gracefully
       
+      path = [ pkgs.util-linux pkgs.iw ];  # For rfkill and iw commands
+      
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
@@ -106,11 +108,21 @@ in {
           IS_ISO=true
           echo "Running in ISO mode - starting captive portal for web-based setup"
           
-          # Ensure WiFi radio is on
+          # Ensure WiFi radio is on and wait for it
+          echo "Enabling WiFi radio..."
           ${pkgs.networkmanager}/bin/nmcli radio wifi on 2>/dev/null || true
+          sleep 2
+          
+          # Unblock WiFi if rfkill blocked it
+          if command -v rfkill >/dev/null 2>&1; then
+            rfkill unblock wifi 2>/dev/null || true
+            rfkill unblock all 2>/dev/null || true
+          fi
+          sleep 1
         fi
         
-        # Wait a bit for NetworkManager to be fully ready
+        # Wait for NetworkManager to be fully ready
+        echo "Waiting for NetworkManager..."
         sleep 3
         
         # Try to find a wifi interface
@@ -122,6 +134,15 @@ in {
         fi
         
         echo "Found WiFi interface: $WIFI_IFACE"
+        
+        # Show current WiFi state for debugging
+        echo "Current WiFi device state:"
+        ${pkgs.networkmanager}/bin/nmcli device show "$WIFI_IFACE" 2>&1 || true
+        
+        # Disconnect any existing connection on this interface
+        echo "Disconnecting any existing connection on $WIFI_IFACE..."
+        ${pkgs.networkmanager}/bin/nmcli device disconnect "$WIFI_IFACE" 2>/dev/null || true
+        sleep 1
         
         # Disable WiFi power saving for maximum performance and low latency
         ${lib.optionalString (!wifiPowerSave) ''
@@ -137,11 +158,12 @@ in {
         ${pkgs.networkmanager}/bin/nmcli connection delete easyos-hotspot 2>/dev/null || true
         
         # Create the hotspot connection dynamically with detected interface
+        echo "Creating hotspot connection..."
         ${pkgs.networkmanager}/bin/nmcli connection add \
           type wifi \
           ifname "$WIFI_IFACE" \
           con-name easyos-hotspot \
-          autoconnect yes \
+          autoconnect no \
           ssid "${ssid}" \
           802-11-wireless.mode ap \
           802-11-wireless.band bg \
@@ -153,11 +175,32 @@ in {
           ipv6.method disabled \
           wifi-sec.key-mgmt none
         
-        # Activate the connection
-        ${pkgs.networkmanager}/bin/nmcli connection up easyos-hotspot || {
-          echo "Failed to start hotspot on $WIFI_IFACE - hardware may not support AP mode"
+        # Small delay to let NM process the new connection
+        sleep 1
+        
+        # Activate the connection with retries
+        echo "Activating hotspot on $WIFI_IFACE..."
+        HOTSPOT_UP=false
+        for attempt in 1 2 3; do
+          echo "Activation attempt $attempt/3..."
+          if ${pkgs.networkmanager}/bin/nmcli connection up easyos-hotspot 2>&1; then
+            HOTSPOT_UP=true
+            break
+          fi
+          echo "Attempt $attempt failed, waiting before retry..."
+          sleep 3
+        done
+        
+        if [ "$HOTSPOT_UP" = "false" ]; then
+          echo "ERROR: Failed to start hotspot on $WIFI_IFACE after 3 attempts"
+          echo "This WiFi adapter may not support AP mode."
+          echo "Checking device capabilities..."
+          ${pkgs.iw}/bin/iw phy 2>/dev/null | grep -A 10 "Supported interface modes" || true
+          echo ""
+          echo "Current device state:"
+          ${pkgs.networkmanager}/bin/nmcli device show "$WIFI_IFACE" 2>/dev/null || true
           exit 0
-        }
+        fi
         
         echo "Hotspot 'easyos-hotspot' activated successfully on $WIFI_IFACE"
         

@@ -148,7 +148,7 @@
             # Helpful tools for the ISO
             environment.systemPackages = with pkgs; [
               git parted gptfdisk networkmanager openssl jq curl
-              cryptsetup systemd qrencode w3m
+              cryptsetup systemd qrencode w3m util-linux iw
               (writeShellScriptBin "easyos-install" ''
                 # Launch captive portal setup UI
                 echo "Opening easeOS setup wizard..."
