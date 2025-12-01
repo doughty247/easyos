@@ -159,7 +159,7 @@ in {
         
         # Create the hotspot connection dynamically with detected interface
         echo "Creating hotspot connection..."
-        ${pkgs.networkmanager}/bin/nmcli connection add \
+        if ! ${pkgs.networkmanager}/bin/nmcli connection add \
           type wifi \
           ifname "$WIFI_IFACE" \
           con-name easyos-hotspot \
@@ -169,11 +169,22 @@ in {
           802-11-wireless.band bg \
           802-11-wireless.channel ${wifiChannel} \
           802-11-wireless.hidden no \
-          ${lib.optionalString clientIsolation "802-11-wireless.ap-isolation yes"} \
           ipv4.method shared \
           ipv4.addresses ${hotspotIP}/24 \
           ipv6.method disabled \
-          wifi-sec.key-mgmt none
+          wifi-sec.key-mgmt none 2>&1; then
+          echo "ERROR: Failed to create hotspot connection!"
+          echo "Trying alternative method with nmcli device wifi hotspot..."
+          
+          # Alternative: Use the simpler hotspot command
+          ${pkgs.networkmanager}/bin/nmcli device wifi hotspot ifname "$WIFI_IFACE" ssid "${ssid}" password "" 2>&1 || {
+            echo "Alternative method also failed"
+            exit 1
+          }
+        fi
+        
+        echo "Connection created, verifying..."
+        ${pkgs.networkmanager}/bin/nmcli connection show easyos-hotspot 2>&1 | head -5 || echo "Connection not found!"
         
         # Small delay to let NM process the new connection
         sleep 1
