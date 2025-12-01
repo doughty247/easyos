@@ -276,10 +276,24 @@ in {
       '';
     };
 
-    # NetworkManager's 'shared' mode already runs dnsmasq automatically
-    # We don't need to enable a separate dnsmasq service - it handles DHCP/DNS for us
-    # NetworkManager spawns dnsmasq only when the hotspot connection is active
-    # This prevents the boot-time dnsmasq failures seen in the logs
+    # Configure dnsmasq for captive portal DNS hijacking
+    # This makes ALL DNS queries return the hotspot IP, triggering captive portal detection
+    environment.etc."NetworkManager/dnsmasq-shared.d/captive-portal.conf".text = ''
+      # Captive portal DNS hijacking
+      # Respond to ALL DNS queries with the hotspot IP
+      address=/#/${hotspotIP}
+      
+      # But still allow clients to reach the hotspot by hostname
+      address=/easyos.local/${hotspotIP}
+      address=/setup.local/${hotspotIP}
+      
+      # Don't forward any DNS queries upstream - pure captive portal
+      no-resolv
+      
+      # Log DNS queries for debugging
+      log-queries
+      log-facility=/var/log/dnsmasq-captive.log
+    '';
 
     services.nginx = {
       enable = true;
@@ -292,23 +306,48 @@ in {
           { addr = "10.42.0.1"; port = 80; }
         ];
         
+        # Default: redirect everything to captive portal
         locations."/" = {
           return = "302 http://10.42.0.1:${toString captivePort}/";
         };
         
+        # Android captive portal detection
         locations."/generate_204" = { 
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
         locations."/gen_204" = { 
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
+        
+        # Apple/iOS captive portal detection
         locations."/hotspot-detect.html" = { 
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
-        locations."/connectivity-check.html" = { 
+        locations."/library/test/success.html" = { 
+          return = "302 http://10.42.0.1:${toString captivePort}/"; 
+        };
+        
+        # Windows captive portal detection (NCSI)
+        locations."/connecttest.txt" = { 
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
         locations."/ncsi.txt" = { 
+          return = "302 http://10.42.0.1:${toString captivePort}/"; 
+        };
+        locations."/redirect" = { 
+          return = "302 http://10.42.0.1:${toString captivePort}/"; 
+        };
+        
+        # Firefox/Mozilla captive portal detection
+        locations."/success.txt" = { 
+          return = "302 http://10.42.0.1:${toString captivePort}/"; 
+        };
+        locations."/canonical.html" = { 
+          return = "302 http://10.42.0.1:${toString captivePort}/"; 
+        };
+        
+        # Generic connectivity checks
+        locations."/connectivity-check.html" = { 
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
       };
