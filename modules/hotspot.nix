@@ -157,8 +157,9 @@ in {
         # Delete any existing hotspot connection
         ${pkgs.networkmanager}/bin/nmcli connection delete easyos-hotspot 2>/dev/null || true
         
-        # Create the hotspot connection dynamically with detected interface
-        echo "Creating hotspot connection..."
+        # Create an OPEN hotspot (no password) for captive portal setup
+        # Don't set any wifi-sec options - this creates a truly open network
+        echo "Creating open hotspot connection..."
         if ! ${pkgs.networkmanager}/bin/nmcli connection add \
           type wifi \
           ifname "$WIFI_IFACE" \
@@ -171,13 +172,12 @@ in {
           802-11-wireless.hidden no \
           ipv4.method shared \
           ipv4.addresses ${hotspotIP}/24 \
-          ipv6.method disabled \
-          wifi-sec.key-mgmt none 2>&1; then
+          ipv6.method disabled 2>&1; then
           echo "ERROR: Failed to create hotspot connection!"
           echo "Trying alternative method with nmcli device wifi hotspot..."
           
-          # Alternative: Use the simpler hotspot command
-          ${pkgs.networkmanager}/bin/nmcli device wifi hotspot ifname "$WIFI_IFACE" ssid "${ssid}" password "" 2>&1 || {
+          # Alternative: Use the simpler hotspot command (open = no password arg)
+          ${pkgs.networkmanager}/bin/nmcli device wifi hotspot ifname "$WIFI_IFACE" con-name easyos-hotspot ssid "${ssid}" 2>&1 || {
             echo "Alternative method also failed"
             exit 1
           }
