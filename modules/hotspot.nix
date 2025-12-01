@@ -311,7 +311,9 @@ in {
           return = "302 http://10.42.0.1:${toString captivePort}/";
         };
         
-        # Android captive portal detection
+        # ============ Android captive portal detection ============
+        # Android expects 204 for success, anything else triggers popup
+        # Return 200/302 to trigger captive portal popup
         locations."/generate_204" = { 
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
@@ -319,15 +321,22 @@ in {
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
         
-        # Apple/iOS captive portal detection
+        # ============ Apple/iOS captive portal detection ============
+        # Apple expects body containing "Success" for connected state
+        # Return anything else (like redirect) to trigger CNA popup
         locations."/hotspot-detect.html" = { 
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
         locations."/library/test/success.html" = { 
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
+        # Also catch with and without leading slash variants
+        locations."= /hotspot-detect.html" = {
+          return = "302 http://10.42.0.1:${toString captivePort}/";
+        };
         
-        # Windows captive portal detection (NCSI)
+        # ============ Windows captive portal detection (NCSI) ============
+        # Windows expects specific content for success
         locations."/connecttest.txt" = { 
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
@@ -338,7 +347,8 @@ in {
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
         
-        # Firefox/Mozilla captive portal detection
+        # ============ Firefox/Mozilla captive portal detection ============
+        # Firefox expects "success" for connected state
         locations."/success.txt" = { 
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
@@ -346,9 +356,15 @@ in {
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
         };
         
-        # Generic connectivity checks
+        # ============ Generic connectivity checks ============
         locations."/connectivity-check.html" = { 
           return = "302 http://10.42.0.1:${toString captivePort}/"; 
+        };
+        
+        # ============ Catch-all for any HTTP request ============
+        # Some systems make requests to random domains, catch them all
+        locations."~ ^/.+" = {
+          return = "302 http://10.42.0.1:${toString captivePort}/";
         };
       };
     };
