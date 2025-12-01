@@ -189,12 +189,12 @@ in {
         # Small delay to let NM process the new connection
         sleep 1
         
-        # Activate the connection with retries
+        # Activate the connection with retries - specify ifname explicitly!
         echo "Activating hotspot on $WIFI_IFACE..."
         HOTSPOT_UP=false
         for attempt in 1 2 3; do
           echo "Activation attempt $attempt/3..."
-          if ${pkgs.networkmanager}/bin/nmcli connection up easyos-hotspot 2>&1; then
+          if ${pkgs.networkmanager}/bin/nmcli connection up easyos-hotspot ifname "$WIFI_IFACE" 2>&1; then
             HOTSPOT_UP=true
             break
           fi
@@ -204,13 +204,21 @@ in {
         
         if [ "$HOTSPOT_UP" = "false" ]; then
           echo "ERROR: Failed to start hotspot on $WIFI_IFACE after 3 attempts"
-          echo "This WiFi adapter may not support AP mode."
-          echo "Checking device capabilities..."
-          ${pkgs.iw}/bin/iw phy 2>/dev/null | grep -A 10 "Supported interface modes" || true
-          echo ""
-          echo "Current device state:"
-          ${pkgs.networkmanager}/bin/nmcli device show "$WIFI_IFACE" 2>/dev/null || true
-          exit 0
+          echo "Trying alternative hotspot method..."
+          
+          # Try the simpler built-in hotspot command as fallback
+          if ${pkgs.networkmanager}/bin/nmcli device wifi hotspot ifname "$WIFI_IFACE" con-name easyos-hotspot ssid "${ssid}" 2>&1; then
+            echo "Alternative hotspot method succeeded!"
+            HOTSPOT_UP=true
+          else
+            echo "Alternative method also failed."
+            echo "Checking device capabilities..."
+            ${pkgs.iw}/bin/iw phy 2>/dev/null | grep -A 10 "Supported interface modes" || true
+            echo ""
+            echo "Current device state:"
+            ${pkgs.networkmanager}/bin/nmcli device show "$WIFI_IFACE" 2>/dev/null || true
+            exit 0
+          fi
         fi
         
         echo "Hotspot 'easyos-hotspot' activated successfully on $WIFI_IFACE"
