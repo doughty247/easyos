@@ -98,9 +98,6 @@ We're building **Cooper**—a beautiful hardware companion for easeOS. A glowing
 
 No screen, no app, no checking. Just a plant that glows.
 
-*Interested? [Join the waitlist →](https://github.com/doughty247/easyos/discussions)*
-
----
 
 ## Links
 
